@@ -9,7 +9,7 @@ const Map = dynamic(() => import("@/components/Map"), {
 export default function Home() {
   return (
     <div className="h-screen w-full flex items-center justify-center">
-      <div className="w-3/4 h-3/4">
+      <div className="w-[70%] h-[70%]">
         <Map />
       </div>
     </div>
