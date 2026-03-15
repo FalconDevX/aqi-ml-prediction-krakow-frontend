@@ -1,6 +1,6 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Tooltip } from "react-leaflet";
 import type { LatLngExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { DistrictsLayer } from "./map/DistrictsLayer";
@@ -19,7 +19,6 @@ export default function Map() {
         attributionControl={false}
         style={{ height: "100%", width: "100%", backgroundColor: "#000000" }}
       >
-        <Marker position={CENTER} title="Kraków" />
         <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" />
         <DistrictsLayer />
         <Stations stations={stations} />
