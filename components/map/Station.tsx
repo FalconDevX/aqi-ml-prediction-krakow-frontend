@@ -2,6 +2,7 @@
 
 import { Marker, Tooltip } from "react-leaflet";
 import L from "leaflet";
+import { useRouter } from "next/navigation";
 
 type Station = {
   id: number;
@@ -20,6 +21,7 @@ const squareIcon = L.divIcon({
 });
 
 export function Stations({ stations }: Props) {
+  const router = useRouter();
   return (
     <>
       {stations.map((station) => (
@@ -27,6 +29,9 @@ export function Stations({ stations }: Props) {
           key={station.id}
           position={[station.lat, station.long]}
           icon={squareIcon}
+          eventHandlers={{
+            click: () => router.push(`/stations/${station.id}`)
+          }}
         >
           <Tooltip direction="top" offset={[0, -10]}>
             {station.name}
