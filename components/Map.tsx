@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, Tooltip } from "react-leaflet";
 import type { LatLngExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { DistrictsLayer } from "./map/DistrictsLayer";
-import { Stations } from "./map/Station";
+import Stations from "./map/Stations";
 import stations from "@/public/stations.json";
 
 const CENTER: LatLngExpression = [50.06, 19.94];
@@ -21,7 +21,9 @@ export default function Map() {
       >
         <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" />
         <DistrictsLayer />
-        <Stations stations={stations} />
+        <Stations
+          stations={stations.map((s) => ({ ...s, color: "#84cc16" }))}
+        />
       </MapContainer>
     </div>
   );
