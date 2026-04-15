@@ -1,11 +1,19 @@
-import React from "react";
+import Image from "next/image"
+import React from "react"
 
 const Header = () => {
-  return (
-    <div className="w-full h-[50px] bg-zinc-900 sticky top-0 z-50 flex items-center">
-      <h1 className="text-2xl font-normal ml-5 text-white">KrakAQI</h1>
-    </div>
-  );
-};
+	return (
+		<header className="sticky top-0 z-50 flex h-[50px] w-full items-center bg-zinc-900">
+			<Image
+				src="/AirCast.png"
+				alt="AirCast"
+				width={140}
+				height={40}
+				className="h-20 w-auto object-contain object-left brightness-0 invert"
+				priority
+			/>
+		</header>
+	)
+}
 
-export default Header;
+export default Header

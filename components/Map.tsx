@@ -1,30 +1,33 @@
-"use client";
+"use client"
 
-import { MapContainer, TileLayer, Marker, Tooltip } from "react-leaflet";
-import type { LatLngExpression } from "leaflet";
-import "leaflet/dist/leaflet.css";
-import { DistrictsLayer } from "./map/DistrictsLayer";
-import Stations from "./map/Stations";
-import stations from "@/public/stations.json";
+import { MapContainer, TileLayer } from "react-leaflet"
+import type { LatLngExpression } from "leaflet"
+import "leaflet/dist/leaflet.css"
+import { DistrictsLayer } from "./map/DistrictsLayer"
+import Stations from "./map/Stations"
+import stations from "@/public/stations.json"
+import type { MetricOption } from "./map/MapOptionsPanel"
 
-const CENTER: LatLngExpression = [50.06, 19.94];
+const CENTER: LatLngExpression = [50.06, 19.94]
 
-export default function Map() {
-  return (
-    <div className="border border-gray-700 rounded-xl overflow-hidden h-full w-full">
-      <MapContainer
-        center={CENTER}
-        zoom={11}
-        scrollWheelZoom
-        attributionControl={false}
-        style={{ height: "100%", width: "100%", backgroundColor: "#000000" }}
-      >
-        <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" />
-        <DistrictsLayer />
-        <Stations
-          stations={stations.map((s) => ({ ...s, color: "#84cc16" }))}
-        />
-      </MapContainer>
-    </div>
-  );
+type Props = {
+	selectedMetric: MetricOption
+}
+
+export default function Map({ selectedMetric }: Props) {
+	return (
+		<div className="border border-gray-700 rounded-xl overflow-hidden h-full w-full">
+			<MapContainer
+				center={CENTER}
+				zoom={11}
+				scrollWheelZoom
+				attributionControl={false}
+				style={{ height: "100%", width: "100%", backgroundColor: "#000000" }}
+			>
+				<TileLayer url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" />
+				<DistrictsLayer />
+				<Stations stations={stations.map((s) => ({ ...s, color: "#84cc16" }))} selectedMetric={selectedMetric} />
+			</MapContainer>
+		</div>
+	)
 }

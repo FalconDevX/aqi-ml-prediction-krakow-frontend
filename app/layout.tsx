@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
   
 export const metadata: Metadata = {
-  title: "AQI Map",
-  description: "AQI Map",
+  title: "AirCast",
+  description: "AirCast — mapa jakości powietrza",
+  icons: {
+    icon: [{ url: "/AirCast.png", type: "image/png" }],
+    apple: "/AirCast.png",
+  },
 };
 
 export default function RootLayout({

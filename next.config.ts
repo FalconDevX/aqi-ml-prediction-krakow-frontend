@@ -4,8 +4,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: "/api/stations/current/color/:id",
-        destination: "http://46.225.27.182:8002/stations/current/color/:id",
+        source: "/api/postgre/measurements/last/:id",
+        destination: "http://46.225.27.182:8002/postgre/measurements/last/:id",
       },
     ];
   },
