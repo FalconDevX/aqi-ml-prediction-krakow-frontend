@@ -18,7 +18,7 @@ pipeline {
       steps {
         sh 'npm install >> frontend_build_logs.txt'
         sh 'npm run build >> frontend_build_logs.txt'
-        sh 'npm test >> frontend_build_logs.txt || echo "No tests found" >> frontend_build_logs.txt'
+        sh 'npm test'
       }
     }
 
