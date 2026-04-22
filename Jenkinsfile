@@ -45,7 +45,7 @@ pipeline {
       steps {
         script {
           sh """
-          docker run -d --name aqi-test-${BUILD_ID} -p 8081:80 ${DOCKER_IMAGE}:${DOCKER_TAG}
+          docker run -d --name aqi-test-${BUILD_ID} -p 8081:3000 ${DOCKER_IMAGE}:${DOCKER_TAG}
           """
 
           sleep 5
