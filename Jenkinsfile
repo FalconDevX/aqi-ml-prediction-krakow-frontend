@@ -88,7 +88,7 @@ pipeline {
 
   }
   environment {
-    DOCKER_IMAGE = 'falcondevx/aqi-frontend'
+    DOCKER_IMAGE = 'mrmacarthur/aqi-frontend'
     DOCKER_TAG = "v1.0.${env.BUILD_ID}-${env.GIT_COMMIT.take(7)}"
   }
   post {
