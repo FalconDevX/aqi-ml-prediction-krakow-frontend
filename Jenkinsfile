@@ -48,16 +48,21 @@ pipeline {
           docker run -d --name aqi-test-${BUILD_ID} -p 8081:3000 ${DOCKER_IMAGE}:${DOCKER_TAG}
           """
 
+          def testContainerIp = sh(
+            script: "docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' aqi-test-${BUILD_ID}",
+            returnStdout: true
+          ).trim()
+
           sh """
           for i in \$(seq 1 10); do
-            if curl -fsS -H "User-Agent: Jenkins" http://localhost:8081/api/health > /dev/null; then
+            if curl -fsS -H "User-Agent: Jenkins" http://${testContainerIp}:3000/api/health > /dev/null; then
               break
             fi
-            echo "Waiting for app..."
+            echo "Waiting for app at ${testContainerIp}:3000..."
             sleep 2
           done
 
-          curl -fsS -H "User-Agent: Jenkins" http://localhost:8081/api/health || {
+          curl -fsS -H "User-Agent: Jenkins" http://${testContainerIp}:3000/api/health || {
             docker logs aqi-test-${BUILD_ID}
             exit 1
           }
