@@ -48,11 +48,19 @@ pipeline {
           docker run -d --name aqi-test-${BUILD_ID} -p 8081:3000 ${DOCKER_IMAGE}:${DOCKER_TAG}
           """
 
-          sleep 5
-
-          // lepszy smoke test (sprawdza HTML)
           sh """
-          curl -f http://localhost:8080 | grep "<html" || exit 1
+          for i in \$(seq 1 10); do
+            if curl -fsS -H "User-Agent: Jenkins" http://localhost:8081/api/health > /dev/null; then
+              break
+            fi
+            echo "Waiting for app..."
+            sleep 2
+          done
+
+          curl -fsS -H "User-Agent: Jenkins" http://localhost:8081/api/health || {
+            docker logs aqi-test-${BUILD_ID}
+            exit 1
+          }
           """
         }
 
