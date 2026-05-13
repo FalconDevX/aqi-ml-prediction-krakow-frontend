@@ -47,9 +47,22 @@ export default function MeasurementsHistory({ history, stationId }: Props) {
 		return [...keys]
 	}, [history])
 
+	const [selectedMetric, setSelectedMetric] = useState(availableMetrics[0] ?? "")
+	const [interpolate, setInterpolate] = useState(false)
 	const [showAiModel, setShowAiModel] = useState(false)
 	const [aiPredictionPoints, setAiPredictionPoints] = useState<{ timestamp: string; value: number }[] | null>(null)
 	const [aiError, setAiError] = useState<string | null>(null)
+
+	useEffect(() => {
+		if (!selectedMetric && availableMetrics[0]) {
+			setSelectedMetric(availableMetrics[0])
+			return
+		}
+
+		if (selectedMetric && !availableMetrics.includes(selectedMetric)) {
+			setSelectedMetric(availableMetrics[0] ?? "")
+		}
+	}, [availableMetrics, selectedMetric])
 
 	useEffect(() => {
 		if (!showAiModel || !stationId || !selectedMetric) {
@@ -85,17 +98,6 @@ export default function MeasurementsHistory({ history, stationId }: Props) {
 			cancelled = true
 		}
 	}, [showAiModel, stationId, selectedMetric])
-
-	useEffect(() => {
-		if (!selectedMetric && availableMetrics[0]) {
-			setSelectedMetric(availableMetrics[0])
-			return
-		}
-
-		if (selectedMetric && !availableMetrics.includes(selectedMetric)) {
-			setSelectedMetric(availableMetrics[0] ?? "")
-		}
-	}, [availableMetrics, selectedMetric])
 
 	const points = useMemo(() => {
 		if (!selectedMetric) {
