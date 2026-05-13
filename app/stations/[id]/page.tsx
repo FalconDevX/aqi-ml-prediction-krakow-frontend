@@ -56,12 +56,12 @@ export default async function StationPage({ params }: Props) {
           {cards.map(([key, value]) => (
             <article
               key={key}
-              className="relative flex aspect-square items-center justify-center rounded-md border border-zinc-700 bg-zinc-800/70 p-1"
+              className="relative flex aspect-square w-20 max-w-full justify-self-center items-center justify-center rounded-md border border-zinc-700 bg-zinc-800/70 p-1"
             >
-              <p className="absolute left-1 top-1 text-[9px] uppercase leading-none tracking-wide text-zinc-500">
+              <p className="absolute left-1 top-1 text-[8px] uppercase leading-none tracking-wide text-zinc-500">
                 {formatLabel(key)}
               </p>
-              <p className="text-base font-semibold leading-none text-zinc-50">
+              <p className="text-sm font-semibold leading-none text-zinc-50">
                 {formatValue(value)}
               </p>
             </article>

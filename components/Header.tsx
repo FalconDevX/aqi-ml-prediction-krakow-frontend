@@ -9,7 +9,7 @@ const Header = () => {
 				alt="AirCast"
 				width={140}
 				height={40}
-				className="h-20 w-auto object-contain object-left brightness-0 invert"
+				className="ml-4 h-10 w-auto object-contain object-left brightness-0 invert"
 				priority
 			/>
 		</header>
