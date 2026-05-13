@@ -1,4 +1,5 @@
 import MeasurementsHistory from "@/components/station/MeasurementsHistory";
+import stations from "@/public/stations.json";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -30,6 +31,12 @@ function formatValue(value: unknown): string {
 export default async function StationPage({ params }: Props) {
   const { id } = await params;
 
+  const stationIdNum = Number(id);
+  const stationMeta = stations.find((s) => s.id === stationIdNum);
+  const stationTitle = stationMeta
+    ? `${stationMeta.name} – Stacja ${id}`
+    : `Stacja ${id}`;
+
   const res = await fetch(
     `http://46.225.27.182:8002/postgre/measurements/${id}`,
   );
@@ -46,19 +53,19 @@ export default async function StationPage({ params }: Props) {
     <main className="min-h-screen bg-[#0a0b0f] p-6 text-zinc-100">
       <section className="max-w-3xl rounded-2xl border border-zinc-800/90 bg-zinc-900/70 p-4 shadow-2xl backdrop-blur-sm">
         <header className="mb-4">
-          <h1 className="text-lg font-semibold tracking-wide">Station {id}</h1>
+          <h1 className="text-lg font-semibold tracking-wide">{stationTitle}</h1>
           <p className="mt-1 text-sm text-zinc-400">
             Ostatni pomiar: {String(data.timestamp ?? "-")}
           </p>
         </header>
 
-        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5 md:grid-cols-7">
+        <div className="grid max-w-full grid-cols-[repeat(4,5rem)] gap-1 sm:grid-cols-[repeat(5,5rem)] md:grid-cols-[repeat(7,5rem)]">
           {cards.map(([key, value]) => (
             <article
               key={key}
-              className="relative flex aspect-square w-20 max-w-full justify-self-center items-center justify-center rounded-md border border-zinc-700 bg-zinc-800/70 p-1"
+              className="relative flex aspect-square w-full items-center justify-center rounded-md border border-zinc-700 bg-zinc-800/70 p-1"
             >
-              <p className="absolute left-1 top-1 text-[8px] uppercase leading-none tracking-wide text-zinc-500">
+              <p className="absolute left-1 top-1 text-[10px] uppercase leading-none tracking-wide text-zinc-500">
                 {formatLabel(key)}
               </p>
               <p className="text-sm font-semibold leading-none text-zinc-50">

@@ -1,8 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-
 import MeasurementsChart from "@/components/station/MeasurementsChart"
+import { useEffect, useMemo, useState } from "react"
 
 type HistoryRow = Record<string, unknown>
 
@@ -84,6 +83,7 @@ export default function MeasurementsHistory({ history }: Props) {
 			<MeasurementsChart
 				title="Wykres ostatnich pomiarów"
 				points={points}
+				metricKey={selectedMetric}
 				headerControl={
 					<div className="flex items-center gap-3">
 						<select

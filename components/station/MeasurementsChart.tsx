@@ -1,6 +1,27 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import {
+	colorAtConcentration,
+	getValueColorScaleForMetric,
+	scaleToCssBandGradient,
+	valueScaleLegendTicks,
+	type ValueColorScale
+} from "@/lib/chartMetricColorScales"
+import {
+	ColorType,
+	createChart,
+	CrosshairMode,
+	LastPriceAnimationMode,
+	LineSeries,
+	LineType,
+	type IChartApi,
+	type ISeriesApi,
+	type LineData,
+	type MouseEventParams,
+	type Time,
+	type UTCTimestamp
+} from "lightweight-charts"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 type MeasurementPoint = {
 	timestamp: string
@@ -10,88 +31,9 @@ type MeasurementPoint = {
 type Props = {
 	title: string
 	points: MeasurementPoint[]
+	metricKey?: string
 	headerControl?: React.ReactNode
 	interpolate?: boolean
-}
-
-type ChartPoint = MeasurementPoint & {
-	x: number
-	y: number
-}
-
-type ChartPadding = {
-	top: number
-	right: number
-	bottom: number
-	left: number
-}
-
-function toChartCoordinates(
-	points: MeasurementPoint[],
-	width: number,
-	height: number,
-	padding: ChartPadding
-): ChartPoint[] {
-	if (points.length === 0) {
-		return []
-	}
-
-	const values = points.map((p) => p.value)
-	const min = Math.min(...values)
-	const max = Math.max(...values)
-	const valueRange = max - min || 1
-	const innerWidth = width - padding.left - padding.right
-	const innerHeight = height - padding.top - padding.bottom
-
-	return points.map((point, index) => {
-		const x =
-			points.length === 1 ? padding.left + innerWidth / 2 : padding.left + (index / (points.length - 1)) * innerWidth
-		const y = padding.top + ((max - point.value) / valueRange) * innerHeight
-		return { ...point, x, y }
-	})
-}
-
-function formatYTick(value: number): string {
-	const abs = Math.abs(value)
-	if (abs >= 1000) {
-		return value.toFixed(0)
-	}
-	if (abs >= 100) {
-		return value.toFixed(0)
-	}
-	if (abs >= 10) {
-		return value.toFixed(1)
-	}
-	return value.toFixed(2)
-}
-
-function yAxisTicks(min: number, max: number, count: number): number[] {
-	if (min === max) {
-		return [min]
-	}
-	const n = Math.max(2, count)
-	return Array.from({ length: n }, (_, i) => min + ((max - min) * i) / (n - 1))
-}
-
-function formatXAxisTime(timestamp: string, showDate: boolean): string {
-	const date = new Date(timestamp)
-	if (Number.isNaN(date.getTime())) {
-		return ""
-	}
-	if (showDate) {
-		return date.toLocaleString("pl-PL", {
-			day: "2-digit",
-			month: "2-digit",
-			hour: "2-digit",
-			minute: "2-digit",
-			hour12: false
-		})
-	}
-	return date.toLocaleTimeString("pl-PL", {
-		hour: "2-digit",
-		minute: "2-digit",
-		hour12: false
-	})
 }
 
 function formatTimestamp(timestamp: string): string {
@@ -109,92 +51,186 @@ function formatTimestamp(timestamp: string): string {
 	})
 }
 
-function toSmoothPath(points: ChartPoint[]): string {
-	if (points.length === 0) {
-		return ""
+function timeToIso(time: Time): string | null {
+	if (typeof time === "number") {
+		return new Date(time * 1000).toISOString()
 	}
-	if (points.length === 1) {
-		return `M ${points[0].x} ${points[0].y}`
+	if (typeof time === "string") {
+		const d = new Date(time)
+		return Number.isNaN(d.getTime()) ? null : d.toISOString()
 	}
-	if (points.length === 2) {
-		return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`
+	if (time && typeof time === "object" && "year" in time) {
+		const { year, month, day } = time as { year: number; month: number; day: number }
+		return new Date(Date.UTC(year, month - 1, day)).toISOString()
 	}
-
-	let path = `M ${points[0].x} ${points[0].y}`
-
-	for (let i = 0; i < points.length - 1; i += 1) {
-		const p0 = points[i - 1] ?? points[i]
-		const p1 = points[i]
-		const p2 = points[i + 1]
-		const p3 = points[i + 2] ?? p2
-
-		const cp1x = p1.x + (p2.x - p0.x) / 6
-		const cp1y = p1.y + (p2.y - p0.y) / 6
-		const cp2x = p2.x - (p3.x - p1.x) / 6
-		const cp2y = p2.y - (p3.y - p1.y) / 6
-
-		path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`
-	}
-
-	return path
+	return null
 }
 
-export default function MeasurementsChart({ title, points, headerControl, interpolate = false }: Props) {
-	const width = 760
-	const height = 220
-	const padding: ChartPadding = {
-		top: 14,
-		right: 14,
-		bottom: 44,
-		left: 52
+function measurementPointsToLineData(
+	points: MeasurementPoint[],
+	valueScale: ValueColorScale | undefined
+): LineData<Time>[] {
+	let lastSec = -Infinity
+	const out: LineData<Time>[] = []
+
+	for (const p of points) {
+		const ms = Date.parse(p.timestamp)
+		if (Number.isNaN(ms)) {
+			continue
+		}
+		let sec = Math.floor(ms / 1000)
+		if (sec <= lastSec) {
+			sec = lastSec + 1
+		}
+		lastSec = sec
+
+		const item: LineData<Time> = {
+			time: sec as UTCTimestamp,
+			value: p.value
+		}
+		if (valueScale) {
+			item.color = colorAtConcentration(valueScale, p.value)
+		}
+		out.push(item)
 	}
-	const xAxisY = height - padding.bottom
-	const yAxisX = padding.left
-	const plotTop = padding.top
-	const plotBottom = height - padding.bottom
-	const [activeIndex, setActiveIndex] = useState<number | null>(null)
-	const chartPoints = useMemo(() => toChartCoordinates(points, width, height, padding), [points])
-	const polylinePoints = chartPoints.map((point) => `${point.x},${point.y}`).join(" ")
-	const smoothPath = toSmoothPath(chartPoints)
+
+	return out
+}
+
+type LineSeriesApi = ISeriesApi<"Line", Time>
+
+function LightweightMeasurementsPlot({
+	points,
+	interpolate,
+	valueScale,
+	onHoverChange
+}: {
+	points: MeasurementPoint[]
+	interpolate: boolean
+	valueScale: ValueColorScale | undefined
+	onHoverChange: (info: { timestampIso: string; value: number } | null) => void
+}) {
+	const containerRef = useRef<HTMLDivElement>(null)
+	const chartRef = useRef<IChartApi | null>(null)
+	const seriesRef = useRef<LineSeriesApi | null>(null)
+	const hoverCbRef = useRef(onHoverChange)
+
+	useEffect(() => {
+		hoverCbRef.current = onHoverChange
+	}, [onHoverChange])
+
+	useEffect(() => {
+		const el = containerRef.current
+		if (!el) {
+			return
+		}
+
+		const chart = createChart(el, {
+			autoSize: true,
+			height: 220,
+			layout: {
+				background: { type: ColorType.Solid, color: "#0c0c0e" },
+				textColor: "#a1a1aa",
+				fontSize: 11,
+				attributionLogo: false
+			},
+			grid: {
+				vertLines: { color: "rgba(63,63,70,0.45)" },
+				horzLines: { color: "rgba(63,63,70,0.45)" }
+			},
+			localization: { locale: "pl-PL" },
+			crosshair: {
+				mode: CrosshairMode.Normal,
+				vertLine: { labelBackgroundColor: "#3f3f46" },
+				horzLine: { labelBackgroundColor: "#3f3f46" }
+			},
+			rightPriceScale: {
+				borderColor: "#3f3f46",
+				scaleMargins: { top: 0.08, bottom: 0.12 }
+			},
+			timeScale: {
+				borderColor: "#3f3f46",
+				timeVisible: true,
+				secondsVisible: false
+			}
+		})
+
+		const series = chart.addSeries(LineSeries, {
+			color: "#a3e635",
+			lineWidth: 2,
+			lineType: interpolate ? LineType.Curved : LineType.Simple,
+			crosshairMarkerVisible: true,
+			lastPriceAnimation: LastPriceAnimationMode.Disabled
+		})
+
+		chartRef.current = chart
+		seriesRef.current = series
+
+		const onCrosshairMove = (param: MouseEventParams<Time>) => {
+			const row = param.seriesData.get(series) as LineData<Time> | undefined
+			if (row && typeof row.value === "number" && param.time !== undefined) {
+				const iso = timeToIso(param.time)
+				if (iso) {
+					hoverCbRef.current({ timestampIso: iso, value: row.value })
+					return
+				}
+			}
+			hoverCbRef.current(null)
+		}
+
+		chart.subscribeCrosshairMove(onCrosshairMove)
+
+		return () => {
+			chart.unsubscribeCrosshairMove(onCrosshairMove)
+			chart.remove()
+			chartRef.current = null
+			seriesRef.current = null
+			hoverCbRef.current(null)
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- jedna instancja wykresu; interpolate aktualizuje osobny efekt
+	}, [])
+
+	useEffect(() => {
+		const series = seriesRef.current
+		const chart = chartRef.current
+		if (!series || !chart) {
+			return
+		}
+		series.setData(measurementPointsToLineData(points, valueScale))
+		chart.timeScale().fitContent()
+	}, [points, valueScale])
+
+	useEffect(() => {
+		seriesRef.current?.applyOptions({
+			lineType: interpolate ? LineType.Curved : LineType.Simple
+		})
+	}, [interpolate])
+
+	return <div ref={containerRef} className="h-[220px] w-full min-w-0 overflow-hidden rounded-lg border border-zinc-800/80" />
+}
+
+export default function MeasurementsChart({
+	title,
+	points,
+	metricKey = "",
+	headerControl,
+	interpolate = false
+}: Props) {
+	const [hover, setHover] = useState<{ timestampIso: string; value: number } | null>(null)
+
+	const valueScale = metricKey ? getValueColorScaleForMetric(metricKey) : undefined
+	const scaleLegendTicks = useMemo(
+		() => (valueScale ? valueScaleLegendTicks(valueScale) : []),
+		[valueScale]
+	)
+
 	const lastPoint = points.at(-1)
-	const activePoint = activeIndex !== null && chartPoints[activeIndex] ? chartPoints[activeIndex] : null
-	const values = points.map((p) => p.value)
-	const minValue = values.length ? Math.min(...values) : 0
-	const maxValue = values.length ? Math.max(...values) : 0
-	const valueRange = maxValue - minValue || 1
-	const innerHeight = plotBottom - plotTop
-
-	const yTickValues = useMemo(() => yAxisTicks(minValue, maxValue, 5), [minValue, maxValue])
-
-	const xAxisShowDate = useMemo(() => {
-		if (points.length < 2) {
-			return false
-		}
-		const a = new Date(points[0].timestamp).getTime()
-		const b = new Date(points[points.length - 1].timestamp).getTime()
-		if (Number.isNaN(a) || Number.isNaN(b)) {
-			return false
-		}
-		return b - a >= 86_400_000
-	}, [points])
-
-	const xTickIndices = useMemo(() => {
-		const n = points.length
-		if (n === 0) {
-			return []
-		}
-		const want = Math.min(6, n)
-		if (want === 1) {
-			return [0]
-		}
-		const raw = Array.from({ length: want }, (_, i) => Math.round((i * (n - 1)) / (want - 1)))
-		return [...new Set(raw)]
-	}, [points])
-
-	const yForValue = (v: number) => plotTop + ((maxValue - v) / valueRange) * innerHeight
-
 	const startTime = points[0]?.timestamp ? formatTimestamp(points[0].timestamp) : "-"
 	const endTime = points.at(-1)?.timestamp ? formatTimestamp(points.at(-1)!.timestamp) : "-"
+
+	const onHoverChange = useCallback((info: { timestampIso: string; value: number } | null) => {
+		queueMicrotask(() => setHover(info))
+	}, [])
 
 	return (
 		<section className="mt-4 rounded-2xl border border-zinc-800/90 bg-zinc-900/70 p-3 shadow-2xl backdrop-blur-sm">
@@ -209,106 +245,65 @@ export default function MeasurementsChart({ title, points, headerControl, interp
 			{points.length === 0 ? (
 				<p className="text-sm text-zinc-400">Brak danych do wykresu.</p>
 			) : (
-				<div className="w-full">
-					<svg
-						viewBox={`0 0 ${width} ${height}`}
-						className="h-[220px] w-full rounded-lg bg-zinc-950/70"
-						aria-label={`${title} chart`}
-						role="img"
-						onMouseMove={(event) => {
-							const svg = event.currentTarget
-							const rect = svg.getBoundingClientRect()
-							const relativeX = event.clientX - rect.left
-							const clampedX = Math.max(0, Math.min(rect.width, relativeX))
-							const ratio = rect.width === 0 ? 0 : clampedX / rect.width
-							const index = Math.round(ratio * (chartPoints.length - 1))
-							setActiveIndex(index)
-						}}
-						onMouseLeave={() => setActiveIndex(null)}
-					>
-						<line
-							x1={yAxisX}
-							y1={xAxisY}
-							x2={width - padding.right}
-							y2={xAxisY}
-							className="stroke-zinc-700"
-							strokeWidth="1"
-						/>
-						<line x1={yAxisX} y1={plotTop} x2={yAxisX} y2={xAxisY} className="stroke-zinc-700" strokeWidth="1" />
-						{yTickValues.map((tick) => {
-							const y = yForValue(tick)
-							return (
-								<g key={`y-${tick}`}>
-									<line x1={yAxisX - 4} y1={y} x2={yAxisX} y2={y} className="stroke-zinc-600" strokeWidth="1" />
-									<text x={yAxisX - 8} y={y + 3} textAnchor="end" className="fill-zinc-500" style={{ fontSize: 10 }}>
-										{formatYTick(tick)}
-									</text>
-								</g>
-							)
-						})}
-						{xTickIndices.map((idx) => {
-							const pt = chartPoints[idx]
-							const label = points[idx] ? formatXAxisTime(points[idx].timestamp, xAxisShowDate) : ""
-							if (!pt) {
-								return null
-							}
-							return (
-								<g key={`x-${idx}`}>
-									<line x1={pt.x} y1={xAxisY} x2={pt.x} y2={xAxisY + 4} className="stroke-zinc-600" strokeWidth="1" />
-									<text x={pt.x} y={xAxisY + 18} textAnchor="middle" className="fill-zinc-500" style={{ fontSize: 10 }}>
-										{label}
-									</text>
-								</g>
-							)
-						})}
-						{interpolate ? (
-							<path
-								d={smoothPath}
-								fill="none"
-								className="stroke-lime-400"
-								strokeWidth="2"
-								strokeLinejoin="round"
-								strokeLinecap="round"
-							/>
-						) : (
-							<polyline
-								points={polylinePoints}
-								fill="none"
-								className="stroke-lime-400"
-								strokeWidth="2"
-								strokeLinejoin="round"
-								strokeLinecap="round"
-							/>
-						)}
-						{activePoint ? (
-							<>
-								<line
-									x1={activePoint.x}
-									y1={plotTop}
-									x2={activePoint.x}
-									y2={plotBottom}
-									className="stroke-zinc-600"
-									strokeDasharray="4 4"
-									strokeWidth="1"
+				<div className="w-full min-w-0">
+					{valueScale ? (
+						<div className="mb-2 max-w-md space-y-0.5">
+							<p className="text-[10px] uppercase tracking-wide text-zinc-500">
+								Skala kolorów {valueScale.id.toUpperCase()} ({valueScale.unitLabel})
+							</p>
+							<div className="relative w-full">
+								<div
+									className="h-1 w-full rounded-sm border border-zinc-700/80"
+									style={{ background: scaleToCssBandGradient(valueScale) }}
+									role="presentation"
 								/>
-								<circle cx={activePoint.x} cy={activePoint.y} r="4" className="fill-lime-300" />
-							</>
-						) : null}
-					</svg>
+								<div className="relative mt-0.5 h-3.5 w-full font-mono text-[9px] leading-none text-zinc-500">
+									{scaleLegendTicks.map((tick) => {
+										const { positionPct, value } = tick
+										const alignEnd = positionPct >= 99.9
+										const alignStart = positionPct <= 0.1
+										return (
+											<span
+												key={`${value}-${positionPct}`}
+												className="absolute top-0 whitespace-nowrap"
+												style={{
+													left: `${positionPct}%`,
+													transform: alignStart
+														? "translateX(0)"
+														: alignEnd
+															? "translateX(-100%)"
+															: "translateX(-50%)"
+												}}
+											>
+												{value}
+											</span>
+										)
+									})}
+								</div>
+							</div>
+						</div>
+					) : null}
+
+					<LightweightMeasurementsPlot
+						points={points}
+						interpolate={interpolate}
+						valueScale={valueScale}
+						onHoverChange={onHoverChange}
+					/>
 
 					<div className="mt-2 text-center text-[11px] text-zinc-500">
 						Pełny zakres czasu: {startTime} — {endTime}
 					</div>
 
-					<div className="mt-1 h-8 text-xs text-zinc-300">
-						{activePoint ? (
+					<div className="mt-1 min-h-8 text-xs text-zinc-300">
+						{hover ? (
 							<p>
-								<span className="text-zinc-500">Data:</span> {formatTimestamp(activePoint.timestamp)}{" "}
+								<span className="text-zinc-500">Data:</span> {formatTimestamp(hover.timestampIso)}{" "}
 								<span className="mx-2 text-zinc-600">|</span>
-								<span className="text-zinc-500">Wartość:</span> {activePoint.value}
+								<span className="text-zinc-500">Wartość:</span> {hover.value}
 							</p>
 						) : (
-							<p className="text-zinc-500">Najedz na wykres, aby zobaczyc wartosc w czasie.</p>
+							<p className="text-zinc-500">Najedź na wykres lub przeciągnij kursor, aby zobaczyć wartość w czasie.</p>
 						)}
 					</div>
 				</div>
