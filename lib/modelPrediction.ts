@@ -30,7 +30,19 @@ function pickValue(row: Record<string, unknown>, targetParam: string): number | 
 			return v
 		}
 	}
-	for (const v of Object.values(row)) {
+	const skip = new Set([
+		"id",
+		"station_id",
+		"timestamp",
+		"time",
+		"date",
+		"ts",
+		"datetime"
+	])
+	for (const [k, v] of Object.entries(row)) {
+		if (skip.has(k)) {
+			continue
+		}
 		if (typeof v === "number" && Number.isFinite(v)) {
 			return v
 		}

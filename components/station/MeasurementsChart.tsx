@@ -13,6 +13,7 @@ import {
 	CrosshairMode,
 	LastPriceAnimationMode,
 	LineSeries,
+	LineStyle,
 	LineType,
 	type IChartApi,
 	type ISeriesApi,
@@ -31,6 +32,8 @@ type MeasurementPoint = {
 type Props = {
 	title: string
 	points: MeasurementPoint[]
+	/** Dane predykcji z `/model/prediction/...`; `null` = wyłączone lub brak serii. */
+	predictionPoints?: MeasurementPoint[] | null
 	metricKey?: string
 	headerControl?: React.ReactNode
 	interpolate?: boolean
@@ -97,22 +100,33 @@ function measurementPointsToLineData(
 	return out
 }
 
+type HoverInfo = {
+	timestampIso: string
+	measured?: number
+	predicted?: number
+}
+
+type LightweightMeasurementsPlotProps = {
+	points: MeasurementPoint[]
+	predictionPoints: MeasurementPoint[] | null
+	interpolate: boolean
+	valueScale: ValueColorScale | undefined
+	onHoverChange: (info: HoverInfo | null) => void
+}
+
 type LineSeriesApi = ISeriesApi<"Line", Time>
 
 function LightweightMeasurementsPlot({
 	points,
+	predictionPoints,
 	interpolate,
 	valueScale,
 	onHoverChange
-}: {
-	points: MeasurementPoint[]
-	interpolate: boolean
-	valueScale: ValueColorScale | undefined
-	onHoverChange: (info: { timestampIso: string; value: number } | null) => void
-}) {
+}: LightweightMeasurementsPlotProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const chartRef = useRef<IChartApi | null>(null)
 	const seriesRef = useRef<LineSeriesApi | null>(null)
+	const predictionSeriesRef = useRef<LineSeriesApi | null>(null)
 	const hoverCbRef = useRef(onHoverChange)
 
 	useEffect(() => {
@@ -163,19 +177,38 @@ function LightweightMeasurementsPlot({
 			lastPriceAnimation: LastPriceAnimationMode.Disabled
 		})
 
+		const predSeries = chart.addSeries(LineSeries, {
+			color: "#38bdf8",
+			lineWidth: 2,
+			lineStyle: LineStyle.Dashed,
+			lineType: interpolate ? LineType.Curved : LineType.Simple,
+			crosshairMarkerVisible: true,
+			lastPriceAnimation: LastPriceAnimationMode.Disabled
+		})
+
 		chartRef.current = chart
 		seriesRef.current = series
+		predictionSeriesRef.current = predSeries
 
 		const onCrosshairMove = (param: MouseEventParams<Time>) => {
-			const row = param.seriesData.get(series) as LineData<Time> | undefined
-			if (row && typeof row.value === "number" && param.time !== undefined) {
-				const iso = timeToIso(param.time)
-				if (iso) {
-					hoverCbRef.current({ timestampIso: iso, value: row.value })
-					return
-				}
+			if (param.time === undefined || param.point === undefined) {
+				hoverCbRef.current(null)
+				return
 			}
-			hoverCbRef.current(null)
+			const iso = timeToIso(param.time)
+			if (!iso) {
+				hoverCbRef.current(null)
+				return
+			}
+			const mainRow = param.seriesData.get(series) as LineData<Time> | undefined
+			const predRow = param.seriesData.get(predSeries) as LineData<Time> | undefined
+			const measured = mainRow && typeof mainRow.value === "number" ? mainRow.value : undefined
+			const predicted = predRow && typeof predRow.value === "number" ? predRow.value : undefined
+			if (measured === undefined && predicted === undefined) {
+				hoverCbRef.current(null)
+				return
+			}
+			hoverCbRef.current({ timestampIso: iso, measured, predicted })
 		}
 
 		chart.subscribeCrosshairMove(onCrosshairMove)
@@ -185,6 +218,7 @@ function LightweightMeasurementsPlot({
 			chart.remove()
 			chartRef.current = null
 			seriesRef.current = null
+			predictionSeriesRef.current = null
 			hoverCbRef.current(null)
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- jedna instancja wykresu; interpolate aktualizuje osobny efekt
@@ -201,9 +235,21 @@ function LightweightMeasurementsPlot({
 	}, [points, valueScale])
 
 	useEffect(() => {
-		seriesRef.current?.applyOptions({
-			lineType: interpolate ? LineType.Curved : LineType.Simple
-		})
+		const pred = predictionSeriesRef.current
+		if (!pred) {
+			return
+		}
+		if (predictionPoints === null || predictionPoints.length === 0) {
+			pred.setData([])
+		} else {
+			pred.setData(measurementPointsToLineData(predictionPoints, undefined))
+		}
+	}, [predictionPoints])
+
+	useEffect(() => {
+		const lt = interpolate ? LineType.Curved : LineType.Simple
+		seriesRef.current?.applyOptions({ lineType: lt })
+		predictionSeriesRef.current?.applyOptions({ lineType: lt })
 	}, [interpolate])
 
 	return <div ref={containerRef} className="h-[220px] w-full min-w-0 overflow-hidden rounded-lg border border-zinc-800/80" />
@@ -212,11 +258,12 @@ function LightweightMeasurementsPlot({
 export default function MeasurementsChart({
 	title,
 	points,
+	predictionPoints = null,
 	metricKey = "",
 	headerControl,
 	interpolate = false
 }: Props) {
-	const [hover, setHover] = useState<{ timestampIso: string; value: number } | null>(null)
+	const [hover, setHover] = useState<HoverInfo | null>(null)
 
 	const valueScale = metricKey ? getValueColorScaleForMetric(metricKey) : undefined
 	const scaleLegendTicks = useMemo(
@@ -224,11 +271,13 @@ export default function MeasurementsChart({
 		[valueScale]
 	)
 
+	const showAiLegend = predictionPoints !== null && predictionPoints.length > 0
+
 	const lastPoint = points.at(-1)
 	const startTime = points[0]?.timestamp ? formatTimestamp(points[0].timestamp) : "-"
 	const endTime = points.at(-1)?.timestamp ? formatTimestamp(points.at(-1)!.timestamp) : "-"
 
-	const onHoverChange = useCallback((info: { timestampIso: string; value: number } | null) => {
+	const onHoverChange = useCallback((info: HoverInfo | null) => {
 		queueMicrotask(() => setHover(info))
 	}, [])
 
@@ -284,8 +333,15 @@ export default function MeasurementsChart({
 						</div>
 					) : null}
 
+					{showAiLegend ? (
+						<p className="mb-1 text-center text-[10px] text-sky-400/90">
+							Niebieska linia przerywana: predykcja modelu AI.
+						</p>
+					) : null}
+
 					<LightweightMeasurementsPlot
 						points={points}
+						predictionPoints={predictionPoints ?? null}
 						interpolate={interpolate}
 						valueScale={valueScale}
 						onHoverChange={onHoverChange}
@@ -298,9 +354,21 @@ export default function MeasurementsChart({
 					<div className="mt-1 min-h-8 text-xs text-zinc-300">
 						{hover ? (
 							<p>
-								<span className="text-zinc-500">Data:</span> {formatTimestamp(hover.timestampIso)}{" "}
-								<span className="mx-2 text-zinc-600">|</span>
-								<span className="text-zinc-500">Wartość:</span> {hover.value}
+								<span className="text-zinc-500">Data:</span> {formatTimestamp(hover.timestampIso)}
+								{hover.measured !== undefined ? (
+									<>
+										{" "}
+										<span className="mx-2 text-zinc-600">|</span>
+										<span className="text-zinc-500">Pomiar:</span> {hover.measured}
+									</>
+								) : null}
+								{hover.predicted !== undefined ? (
+									<>
+										{" "}
+										<span className="mx-2 text-zinc-600">|</span>
+										<span className="text-sky-400/90">Model AI:</span> {hover.predicted}
+									</>
+								) : null}
 							</p>
 						) : (
 							<p className="text-zinc-500">Najedź na wykres lub przeciągnij kursor, aby zobaczyć wartość w czasie.</p>

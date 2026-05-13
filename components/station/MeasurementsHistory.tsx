@@ -1,12 +1,14 @@
 "use client"
 
 import MeasurementsChart from "@/components/station/MeasurementsChart"
+import { fetchModelPredictionPoints } from "@/lib/modelPrediction"
 import { useEffect, useMemo, useState } from "react"
 
 type HistoryRow = Record<string, unknown>
 
 type Props = {
 	history: HistoryRow[]
+	stationId: string
 }
 
 const EXCLUDED_KEYS = new Set(["id", "station_id", "timestamp"])
@@ -26,7 +28,7 @@ function formatLabel(key: string): string {
 	return LABELS[key] ?? key.replaceAll("_", " ").toUpperCase()
 }
 
-export default function MeasurementsHistory({ history }: Props) {
+export default function MeasurementsHistory({ history, stationId }: Props) {
 	const availableMetrics = useMemo(() => {
 		if (history.length === 0) {
 			return [] as string[]
@@ -45,8 +47,44 @@ export default function MeasurementsHistory({ history }: Props) {
 		return [...keys]
 	}, [history])
 
-	const [selectedMetric, setSelectedMetric] = useState(availableMetrics[0] ?? "")
-	const [interpolate, setInterpolate] = useState(false)
+	const [showAiModel, setShowAiModel] = useState(false)
+	const [aiPredictionPoints, setAiPredictionPoints] = useState<{ timestamp: string; value: number }[] | null>(null)
+	const [aiError, setAiError] = useState<string | null>(null)
+
+	useEffect(() => {
+		if (!showAiModel || !stationId || !selectedMetric) {
+			setAiPredictionPoints(null)
+			setAiError(null)
+			return
+		}
+
+		let cancelled = false
+		setAiPredictionPoints(null)
+		setAiError(null)
+
+		void (async () => {
+			try {
+				const pts = await fetchModelPredictionPoints(stationId, selectedMetric)
+				if (cancelled) {
+					return
+				}
+				setAiPredictionPoints(pts)
+				if (pts.length === 0) {
+					setAiError("Brak danych predykcji dla tego wskaźnika.")
+				}
+			} catch (err) {
+				if (cancelled) {
+					return
+				}
+				setAiPredictionPoints([])
+				setAiError(err instanceof Error ? err.message : "Nie udało się pobrać predykcji modelu.")
+			}
+		})()
+
+		return () => {
+			cancelled = true
+		}
+	}, [showAiModel, stationId, selectedMetric])
 
 	useEffect(() => {
 		if (!selectedMetric && availableMetrics[0]) {
@@ -83,9 +121,10 @@ export default function MeasurementsHistory({ history }: Props) {
 			<MeasurementsChart
 				title="Wykres ostatnich pomiarów"
 				points={points}
+				predictionPoints={showAiModel ? aiPredictionPoints : null}
 				metricKey={selectedMetric}
 				headerControl={
-					<div className="flex items-center gap-3">
+					<div className="flex flex-wrap items-center gap-3">
 						<select
 							value={selectedMetric}
 							onChange={(event) => setSelectedMetric(event.target.value)}
@@ -108,10 +147,25 @@ export default function MeasurementsHistory({ history }: Props) {
 							/>
 							Interpolate
 						</label>
+
+						<label className="flex items-center gap-1 text-xs text-zinc-300">
+							<input
+								type="checkbox"
+								checked={showAiModel}
+								onChange={(event) => setShowAiModel(event.target.checked)}
+								className="h-3.5 w-3.5 accent-sky-400"
+							/>
+							Model AI
+						</label>
 					</div>
 				}
 				interpolate={interpolate}
 			/>
+			{showAiModel && aiError ? (
+				<p className="mt-2 text-xs text-red-400/90" role="alert">
+					{aiError}
+				</p>
+			) : null}
 		</section>
 	)
 }

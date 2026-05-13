@@ -76,7 +76,7 @@ export default async function StationPage({ params }: Props) {
         </div>
       </section>
 
-      <MeasurementsHistory history={history} />
+      <MeasurementsHistory history={history} stationId={id} />
     </main>
   );
 }
