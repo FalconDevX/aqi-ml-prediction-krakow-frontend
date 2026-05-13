@@ -84,6 +84,47 @@ export function normalizeModelPredictionPayload(
 	return []
 }
 
+async function readPredictionApiErrorMessage(res: Response): Promise<string> {
+	const text = await res.text()
+	const trimmed = text.trim()
+	if (!trimmed) {
+		return `Błąd predykcji (HTTP ${res.status}).`
+	}
+	try {
+		const json = JSON.parse(trimmed) as unknown
+		if (json && typeof json === "object") {
+			const o = json as Record<string, unknown>
+			const detail = o.detail
+			if (typeof detail === "string") {
+				return detail
+			}
+			if (Array.isArray(detail)) {
+				const parts = detail
+					.map((item) => {
+						if (typeof item === "string") {
+							return item
+						}
+						if (item && typeof item === "object" && "msg" in item) {
+							return String((item as { msg: unknown }).msg)
+						}
+						return null
+					})
+					.filter((s): s is string => Boolean(s))
+				if (parts.length > 0) {
+					return parts.join(" ")
+				}
+			}
+			const message = o.message
+			if (typeof message === "string") {
+				return message
+			}
+		}
+	} catch {
+		/* nie JSON */
+	}
+	return trimmed.length > 400 ? `${trimmed.slice(0, 397)}…` : trimmed
+}
+
 export async function fetchModelPredictionPoints(
 	stationId: string,
 	targetParam: string
@@ -92,7 +133,8 @@ export async function fetchModelPredictionPoints(
 	const encId = encodeURIComponent(stationId)
 	const res = await fetch(`/api/model/prediction/${encParam}/${encId}`)
 	if (!res.ok) {
-		throw new Error(`Model prediction HTTP ${res.status}`)
+		const detail = await readPredictionApiErrorMessage(res)
+		throw new Error(detail)
 	}
 	const raw: unknown = await res.json()
 	return normalizeModelPredictionPayload(raw, targetParam)
