@@ -1,22 +1,41 @@
-import { useEffect, useState } from "react";
-import type { GeoJsonObject } from "geojson";
-import { DISTRICT_FILES } from "@/constants/districts";
+"use client"
 
-type District = { data: GeoJsonObject; name: string };
+import { createTimedCache } from "@/lib/clientDataCache"
+import type { GeoJsonObject } from "geojson"
+import { useEffect, useState } from "react"
 
-export function useDistricts() {
-  const [districts, setDistricts] = useState<District[]>([]);
+export type District = { data: GeoJsonObject; name: string }
 
-  useEffect(() => {
-    Promise.all(
-      DISTRICT_FILES.map(async ({ path, name }) => {
-        const res = await fetch(path);
-        const data = (await res.json()) as GeoJsonObject;
-        return { data, name };
-      }),
-    ).then(setDistricts);
-  }, []);
+const districtsCache = createTimedCache<District[]>(Number.POSITIVE_INFINITY)
 
-  return districts;
+async function fetchDistricts(): Promise<District[]> {
+	const res = await fetch("/api/districts")
+	if (!res.ok) {
+		return []
+	}
+	return (await res.json()) as District[]
 }
 
+export function prefetchDistricts(): Promise<District[]> {
+	return districtsCache.load(fetchDistricts)
+}
+
+export function useDistricts(): District[] {
+	const [districts, setDistricts] = useState<District[]>(() => districtsCache.get() ?? [])
+
+	useEffect(() => {
+		let cancelled = false
+
+		prefetchDistricts().then((data) => {
+			if (!cancelled) {
+				setDistricts(data)
+			}
+		})
+
+		return () => {
+			cancelled = true
+		}
+	}, [])
+
+	return districts
+}

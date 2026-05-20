@@ -39,6 +39,7 @@ export default async function StationPage({ params }: Props) {
 
   const res = await fetch(
     `http://46.225.27.182:8002/postgre/measurements/${id}`,
+    { next: { revalidate: 60 } },
   );
   const history = (await res.json()) as Record<string, unknown>[];
   const data = history.at(-1) ?? {};

@@ -8,11 +8,13 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "stations:districts": "node scripts/assign-station-districts.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "fuse.js": "^7.3.0",
     "leaflet": "^1.9.4",
     "lightweight-charts": "^5.2.0",
     "lucide-react": "^0.577.0",

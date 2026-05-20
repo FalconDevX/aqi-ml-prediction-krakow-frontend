@@ -33,8 +33,20 @@ export default function PlotsLayer({ visible }: Props) {
 	const previousCenter = useRef<{ center: L.LatLng; zoom: number } | null>(null)
 
 	useEffect(() => {
+		if (!visible) {
+			return
+		}
+
 		let cancelled = false
-		Promise.all(PLOT_FILES.map((url) => fetch(url).then((r) => r.json() as Promise<GeoJsonLike>)))
+		Promise.all(
+			PLOT_FILES.map(async (url) => {
+				const res = await fetch(url)
+				if (!res.ok) {
+					throw new Error(`Missing plot geojson: ${url}`)
+				}
+				return res.json() as Promise<GeoJsonLike>
+			})
+		)
 			.then((jsons) => {
 				if (cancelled) {
 					return
@@ -53,7 +65,7 @@ export default function PlotsLayer({ visible }: Props) {
 		return () => {
 			cancelled = true
 		}
-	}, [])
+	}, [visible])
 
 	useEffect(() => {
 		if (!visible || plots.length === 0) {

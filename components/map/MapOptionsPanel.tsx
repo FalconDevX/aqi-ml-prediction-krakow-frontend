@@ -1,5 +1,12 @@
 "use client"
 
+import {
+	getValueColorScaleForMetric,
+	scaleToCssBandGradient,
+	valueScaleLegendTicks
+} from "@/lib/chartMetricColorScales"
+import { useMemo } from "react"
+
 type MetricOption =
 	| "default"
 	| "pm1"
@@ -18,6 +25,8 @@ type MetricOption =
 type Props = {
 	selectedMetric: MetricOption
 	onMetricChange: (metric: MetricOption) => void
+	geospatialApprox: boolean
+	onGeospatialApproxChange: (enabled: boolean) => void
 }
 
 const OPTIONS: Array<{ value: MetricOption; label: string }> = [
@@ -38,7 +47,18 @@ const OPTIONS: Array<{ value: MetricOption; label: string }> = [
 
 export type { MetricOption }
 
-export default function MapOptionsPanel({ selectedMetric, onMetricChange }: Props) {
+export default function MapOptionsPanel({
+	selectedMetric,
+	onMetricChange,
+	geospatialApprox,
+	onGeospatialApproxChange
+}: Props) {
+	const valueScale = getValueColorScaleForMetric(selectedMetric)
+	const scaleLegendTicks = useMemo(
+		() => (valueScale ? valueScaleLegendTicks(valueScale) : []),
+		[valueScale]
+	)
+
 	return (
 		<aside className="h-full w-full rounded-xl border border-gray-700 bg-[#0b0e14]/90 p-4 text-zinc-100">
 			<h2 className="text-sm font-semibold tracking-wide">Opcje mapy</h2>
@@ -58,6 +78,47 @@ export default function MapOptionsPanel({ selectedMetric, onMetricChange }: Prop
 					))}
 				</select>
 			</div>
+
+			<label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-zinc-200">
+				<input
+					type="checkbox"
+					checked={geospatialApprox}
+					onChange={(event) => onGeospatialApproxChange(event.target.checked)}
+					disabled={selectedMetric === "default" || !valueScale}
+					className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 accent-lime-400"
+				/>
+				<span>
+					Aproksymacja geoprzestrzenna kolorów
+					<span className="mt-0.5 block text-xs text-zinc-500">
+						Interpolacja IDW między stacjami (wymaga wybranej metryki z skalą)
+					</span>
+				</span>
+			</label>
+
+			{valueScale ? (
+				<div className="mt-5">
+					<p className="text-xs font-medium text-zinc-300">
+						Skala {valueScale.id.toUpperCase()} ({valueScale.unitLabel})
+					</p>
+					<div
+						className="mt-2 h-3 w-full rounded-sm border border-zinc-700"
+						style={{ background: scaleToCssBandGradient(valueScale) }}
+						role="img"
+						aria-label={`Skala kolorów ${valueScale.id}`}
+					/>
+					<div className="relative mt-1 h-4 w-full text-[10px] text-zinc-500">
+						{scaleLegendTicks.map((tick) => (
+							<span
+								key={tick.value}
+								className="absolute -translate-x-1/2 whitespace-nowrap"
+								style={{ left: `${tick.positionPct}%` }}
+							>
+								{tick.value}
+							</span>
+						))}
+					</div>
+				</div>
+			) : null}
 		</aside>
 	)
 }

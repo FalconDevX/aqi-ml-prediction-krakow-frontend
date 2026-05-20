@@ -12,74 +12,80 @@ export type AirQualityScaleDef = {
 	ranges: readonly AirQualityRange[]
 }
 
+const EEA_BAND_COLORS = ["#50F0E6", "#50CCAA", "#F0E641", "#FF5050", "#960032", "#7D2181"] as const
+const EEA_BAND_LABELS = ["Very Good", "Good", "Moderate", "Poor", "Bad", "Very Bad"] as const
+
+function eeaRanges(
+	maxes: readonly [number, number, number, number, number]
+): AirQualityRange[] {
+	return [
+		{ max: maxes[0], color: EEA_BAND_COLORS[0], label: EEA_BAND_LABELS[0] },
+		{ max: maxes[1], color: EEA_BAND_COLORS[1], label: EEA_BAND_LABELS[1] },
+		{ max: maxes[2], color: EEA_BAND_COLORS[2], label: EEA_BAND_LABELS[2] },
+		{ max: maxes[3], color: EEA_BAND_COLORS[3], label: EEA_BAND_LABELS[3] },
+		{ max: maxes[4], color: EEA_BAND_COLORS[4], label: EEA_BAND_LABELS[4] },
+		{ max: Infinity, color: EEA_BAND_COLORS[5], label: "Hazardous" }
+	]
+}
+
 export const AIR_QUALITY_SCALES = {
+	PM1: {
+		label: "PM1",
+		unit: "µg/m³",
+		ranges: eeaRanges([5, 10, 20, 35, 50])
+	},
+
 	PM25: {
 		label: "PM2.5",
 		unit: "µg/m³",
-		ranges: [
-			{ max: 10, color: "#00E400", label: "Very Good" },
-			{ max: 20, color: "#A3E635", label: "Good" },
-			{ max: 25, color: "#FFD600", label: "Moderate" },
-			{ max: 50, color: "#FF7E00", label: "Poor" },
-			{ max: 75, color: "#FF0000", label: "Bad" },
-			{ max: 100, color: "#8F3F97", label: "Very Bad" },
-			{ max: Infinity, color: "#7E0023", label: "Hazardous" }
-		]
+		ranges: eeaRanges([10, 20, 25, 50, 75])
 	},
 
 	PM10: {
 		label: "PM10",
 		unit: "µg/m³",
-		ranges: [
-			{ max: 20, color: "#00E400", label: "Very Good" },
-			{ max: 35, color: "#A3E635", label: "Good" },
-			{ max: 50, color: "#FFD600", label: "Moderate" },
-			{ max: 100, color: "#FF7E00", label: "Poor" },
-			{ max: 150, color: "#FF0000", label: "Bad" },
-			{ max: 200, color: "#8F3F97", label: "Very Bad" },
-			{ max: Infinity, color: "#7E0023", label: "Hazardous" }
-		]
+		ranges: eeaRanges([20, 40, 50, 100, 150])
 	},
 
 	NO2: {
 		label: "NO₂",
 		unit: "µg/m³",
-		ranges: [
-			{ max: 50, color: "#00E400", label: "Very Good" },
-			{ max: 100, color: "#A3E635", label: "Good" },
-			{ max: 200, color: "#FFD600", label: "Moderate" },
-			{ max: 400, color: "#FF7E00", label: "Poor" },
-			{ max: 600, color: "#FF0000", label: "Bad" },
-			{ max: 800, color: "#8F3F97", label: "Very Bad" },
-			{ max: Infinity, color: "#7E0023", label: "Hazardous" }
-		]
+		ranges: eeaRanges([40, 90, 120, 230, 340])
+	},
+
+	NO: {
+		label: "NO",
+		unit: "µg/m³",
+		ranges: eeaRanges([20, 40, 80, 150, 250])
 	},
 
 	CO: {
 		label: "CO",
-		unit: "mg/m³",
-		ranges: [
-			{ max: 2, color: "#00E400", label: "Very Good" },
-			{ max: 4, color: "#A3E635", label: "Good" },
-			{ max: 7, color: "#FFD600", label: "Moderate" },
-			{ max: 10, color: "#FF7E00", label: "Poor" },
-			{ max: 15, color: "#FF0000", label: "Bad" },
-			{ max: 20, color: "#8F3F97", label: "Very Bad" },
-			{ max: Infinity, color: "#7E0023", label: "Hazardous" }
-		]
+		unit: "µg/m³",
+		ranges: eeaRanges([1000, 5000, 10000, 17000, 34000])
+	},
+
+	O3: {
+		label: "O₃",
+		unit: "µg/m³",
+		ranges: eeaRanges([50, 100, 130, 240, 380])
+	},
+
+	SO2: {
+		label: "SO₂",
+		unit: "µg/m³",
+		ranges: eeaRanges([100, 200, 350, 500, 750])
 	},
 
 	CAQI: {
 		label: "CAQI",
-		unit: "%",
+		unit: "index",
 		ranges: [
-			{ max: 25, color: "#00E400", label: "Very Low" },
-			{ max: 50, color: "#A3E635", label: "Low" },
-			{ max: 75, color: "#FFD600", label: "Medium" },
-			{ max: 100, color: "#FF7E00", label: "High" },
-			{ max: 125, color: "#FF0000", label: "Very High" },
-			{ max: 150, color: "#8F3F97", label: "Extreme" },
-			{ max: Infinity, color: "#7E0023", label: "Hazardous" }
+			{ max: 25, color: "#50F0E6", label: "Very Low" },
+			{ max: 50, color: "#50CCAA", label: "Low" },
+			{ max: 75, color: "#F0E641", label: "Medium" },
+			{ max: 100, color: "#FF5050", label: "High" },
+			{ max: Infinity, color: "#960032", label: "Very High" }
 		]
 	}
 } as const
@@ -110,9 +116,13 @@ export function airQualityScaleToValueColorScale(scaleKey: AirQualityScaleKey): 
 
 /** Klucze metryk z API / selecta → wpis w {@link AIR_QUALITY_SCALES}. */
 export const METRIC_KEY_TO_AIR_QUALITY_SCALE: Partial<Record<string, AirQualityScaleKey>> = {
+	pm1: "PM1",
 	pm25: "PM25",
 	pm10: "PM10",
 	no2: "NO2",
+	no: "NO",
 	co: "CO",
+	o3: "O3",
+	so2: "SO2",
 	caqi: "CAQI"
 }

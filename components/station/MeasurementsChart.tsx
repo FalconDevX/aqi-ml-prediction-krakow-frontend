@@ -271,8 +271,6 @@ export default function MeasurementsChart({
 		[valueScale]
 	)
 
-	const showAiLegend = predictionPoints !== null && predictionPoints.length > 0
-
 	const lastPoint = points.at(-1)
 	const startTime = points[0]?.timestamp ? formatTimestamp(points[0].timestamp) : "-"
 	const endTime = points.at(-1)?.timestamp ? formatTimestamp(points.at(-1)!.timestamp) : "-"
@@ -333,12 +331,6 @@ export default function MeasurementsChart({
 						</div>
 					) : null}
 
-					{showAiLegend ? (
-						<p className="mb-1 text-center text-[10px] text-sky-400/90">
-							Niebieska linia przerywana: predykcja modelu AI.
-						</p>
-					) : null}
-
 					<LightweightMeasurementsPlot
 						points={points}
 						predictionPoints={predictionPoints ?? null}
@@ -366,7 +358,7 @@ export default function MeasurementsChart({
 									<>
 										{" "}
 										<span className="mx-2 text-zinc-600">|</span>
-										<span className="text-sky-400/90">Model AI:</span> {hover.predicted}
+										<span className="text-sky-400/90">	AI:</span> {hover.predicted}
 									</>
 								) : null}
 							</p>
