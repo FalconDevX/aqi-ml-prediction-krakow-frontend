@@ -13,12 +13,7 @@ export type GeoBounds = {
 
 const MIN_DISTANCE_DEG = 1e-7
 
-export function idwInterpolate(
-	lat: number,
-	lng: number,
-	samples: GeoSample[],
-	power = 2
-): number | null {
+export function idwInterpolate( lat: number, lng: number, samples: GeoSample[], power = 2 ): number | null {
 	if (samples.length === 0) {
 		return null
 	}

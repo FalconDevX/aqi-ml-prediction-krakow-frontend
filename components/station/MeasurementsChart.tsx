@@ -153,8 +153,24 @@ function LightweightMeasurementsPlot({
 				horzLines: { color: "rgba(63,63,70,0.45)" }
 			},
 			localization: { locale: "pl-PL" },
+			handleScroll: {
+				mouseWheel: false,
+				pressedMouseMove: false,
+				horzTouchDrag: false,
+				vertTouchDrag: false
+			},
+			handleScale: {
+				mouseWheel: false,
+				pinch: false,
+				axisPressedMouseMove: false,
+				axisDoubleClickReset: false
+			},
+			kineticScroll: {
+				touch: false,
+				mouse: false
+			},
 			crosshair: {
-				mode: CrosshairMode.Normal,
+				mode: CrosshairMode.Magnet,
 				vertLine: { labelBackgroundColor: "#3f3f46" },
 				horzLine: { labelBackgroundColor: "#3f3f46" }
 			},
@@ -191,24 +207,33 @@ function LightweightMeasurementsPlot({
 		predictionSeriesRef.current = predSeries
 
 		const onCrosshairMove = (param: MouseEventParams<Time>) => {
+			if (!chartRef.current) {
+				return
+			}
+
 			if (param.time === undefined || param.point === undefined) {
 				hoverCbRef.current(null)
 				return
 			}
-			const iso = timeToIso(param.time)
-			if (!iso) {
+
+			try {
+				const iso = timeToIso(param.time)
+				if (!iso) {
+					hoverCbRef.current(null)
+					return
+				}
+				const mainRow = param.seriesData.get(series) as LineData<Time> | undefined
+				const predRow = param.seriesData.get(predSeries) as LineData<Time> | undefined
+				const measured = mainRow && typeof mainRow.value === "number" ? mainRow.value : undefined
+				const predicted = predRow && typeof predRow.value === "number" ? predRow.value : undefined
+				if (measured === undefined && predicted === undefined) {
+					hoverCbRef.current(null)
+					return
+				}
+				hoverCbRef.current({ timestampIso: iso, measured, predicted })
+			} catch {
 				hoverCbRef.current(null)
-				return
 			}
-			const mainRow = param.seriesData.get(series) as LineData<Time> | undefined
-			const predRow = param.seriesData.get(predSeries) as LineData<Time> | undefined
-			const measured = mainRow && typeof mainRow.value === "number" ? mainRow.value : undefined
-			const predicted = predRow && typeof predRow.value === "number" ? predRow.value : undefined
-			if (measured === undefined && predicted === undefined) {
-				hoverCbRef.current(null)
-				return
-			}
-			hoverCbRef.current({ timestampIso: iso, measured, predicted })
 		}
 
 		chart.subscribeCrosshairMove(onCrosshairMove)
@@ -276,7 +301,16 @@ export default function MeasurementsChart({
 	const endTime = points.at(-1)?.timestamp ? formatTimestamp(points.at(-1)!.timestamp) : "-"
 
 	const onHoverChange = useCallback((info: HoverInfo | null) => {
-		queueMicrotask(() => setHover(info))
+		setHover((prev) => {
+			if (
+				prev?.timestampIso === info?.timestampIso &&
+				prev?.measured === info?.measured &&
+				prev?.predicted === info?.predicted
+			) {
+				return prev
+			}
+			return info
+		})
 	}, [])
 
 	return (
@@ -363,7 +397,7 @@ export default function MeasurementsChart({
 								) : null}
 							</p>
 						) : (
-							<p className="text-zinc-500">Najedź na wykres lub przeciągnij kursor, aby zobaczyć wartość w czasie.</p>
+							<p className="text-zinc-500">Najedź na wykres, aby zobaczyć wartość w czasie.</p>
 						)}
 					</div>
 				</div>
