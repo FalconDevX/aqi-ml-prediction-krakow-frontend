@@ -179,7 +179,7 @@ export default function MeasurementsHistory({ history, stationId }: Props) {
 								type="checkbox"
 								checked={showAiModel}
 								onChange={(event) => setShowAiModel(event.target.checked)}
-								className="h-3.5 w-3.5 accent-sky-400"
+								className="h-3.5 w-3.5 accent-lime-600"
 							/>
 							Model AI
 						</label>
@@ -192,7 +192,7 @@ export default function MeasurementsHistory({ history, stationId }: Props) {
 										value={predictionHoursPreset}
 										onChange={(event) => setPredictionHoursPreset(Number(event.target.value))}
 										disabled={predictionHoursCustom.trim() !== ""}
-										className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-sky-400 disabled:opacity-50"
+										className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-lime-600 disabled:opacity-50"
 										aria-label="Horyzont predykcji w godzinach"
 									>
 										{PREDICTION_HOURS_PRESETS.map((hours) => (
@@ -210,7 +210,7 @@ export default function MeasurementsHistory({ history, stationId }: Props) {
 										value={predictionHoursCustom}
 										onChange={(event) => setPredictionHoursCustom(event.target.value)}
 										placeholder="1–15"
-										className="w-14 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-sky-400"
+										className="w-14 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-lime-600"
 										aria-label="Własny horyzont predykcji w godzinach"
 									/>
 								</label>

@@ -267,7 +267,7 @@ function LightweightMeasurementsPlot({
 
 		const predSeries = chart.addSeries(LineSeries, {
 			...BASE_LINE_SERIES_OPTIONS,
-			color: "#38bdf8",
+			color: "#65a30d",
 			lineWidth: 2,
 			lineStyle: LineStyle.Dashed,
 			lineType: interpolate ? LineType.Curved : LineType.Simple,
@@ -381,7 +381,7 @@ function LightweightMeasurementsPlot({
 				...BASE_LINE_SERIES_OPTIONS,
 				lineStyle: LineStyle.Dashed,
 				lineType,
-				color: "#38bdf8",
+				color: "#65a30d",
 				crosshairMarkerVisible: true
 			})
 		}
@@ -439,7 +439,7 @@ function LightweightMeasurementsPlot({
 							<>
 								{" "}
 								<span className="mx-2 text-zinc-600">|</span>
-								<span className="text-sky-400/90">AI:</span> {hover.predicted}
+								<span className="text-lime-500/90">AI:</span> {hover.predicted}
 							</>
 						) : null}
 					</p>

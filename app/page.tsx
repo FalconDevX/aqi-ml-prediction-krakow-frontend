@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import Header from "@/components/Header";
 import MapOptionsPanel, { type MetricOption } from "@/components/map/MapOptionsPanel";
 import StationSearch from "@/components/map/StationSearch";
 import { prefetchDistricts } from "@/hooks/useDistricts";
@@ -36,18 +35,16 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="h-screen w-full flex flex-col items-center">
-      <Header />
-
-      <div className="mt-10 flex h-[70%] w-[85%] gap-4">
-        <div className="h-full flex-1">
+    <div className="flex h-full w-full flex-col items-center overflow-hidden px-6 py-4">
+      <div className="flex h-full min-h-0 w-[85%] gap-4">
+        <div className="h-full min-h-0 flex-1">
           <Map
             selectedMetric={selectedMetric}
             geospatialApprox={geospatialApprox}
             visibleStationIds={visibleStationIds}
           />
         </div>
-        <div className="flex h-full w-[320px] flex-col gap-4 overflow-y-auto">
+        <div className="flex h-full min-h-0 w-[320px] flex-col gap-4 overflow-hidden">
           <StationSearch
             stations={STATIONS}
             query={stationSearchQuery}

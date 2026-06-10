@@ -52,7 +52,7 @@ export default async function StationPage({ params }: Props) {
   );
 
   return (
-    <main className="min-h-screen bg-[#0a0b0f] p-6 text-zinc-100">
+    <main className="h-full overflow-y-auto bg-[#0a0b0f] p-6 text-zinc-100">
       <section className="max-w-3xl rounded-2xl border border-zinc-800/90 bg-zinc-900/70 p-4 shadow-2xl backdrop-blur-sm">
         <header className="mb-4">
           <h1 className="text-lg font-semibold tracking-wide">{stationTitle}</h1>

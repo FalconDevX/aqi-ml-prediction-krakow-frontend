@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Header from "@/components/Header";
 import "./globals.css";
   
 export const metadata: Metadata = {
@@ -16,11 +17,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="min-h-screen w-full">
+    <html lang="en" className="h-full w-full overflow-hidden">
       <body
-        className="antialiased min-h-screen w-full bg-zinc-950"
+        className="flex h-full w-full flex-col overflow-hidden bg-zinc-950 antialiased"
       >
-        {children}
+        <Header />
+        <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
       </body>
     </html>
   );
