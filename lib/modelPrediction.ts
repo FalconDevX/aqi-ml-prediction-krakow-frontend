@@ -3,6 +3,41 @@ export type ModelPredictionPoint = {
 	value: number
 }
 
+export const PREDICTION_HOURS_MIN = 1
+export const PREDICTION_HOURS_MAX = 15
+export const PREDICTION_HOURS_DEFAULT = 10
+export const PREDICTION_HOURS_PRESETS = [5, 10, 15] as const
+
+export function resolvePredictionHours(
+	presetHours: number,
+	customInput: string
+): { hours: number } | { error: string } {
+	const trimmed = customInput.trim()
+	if (trimmed === "") {
+		if (
+			!Number.isInteger(presetHours) ||
+			presetHours < PREDICTION_HOURS_MIN ||
+			presetHours > PREDICTION_HOURS_MAX
+		) {
+			return { hours: PREDICTION_HOURS_DEFAULT }
+		}
+		return { hours: presetHours }
+	}
+
+	if (!/^\d+$/.test(trimmed)) {
+		return { error: `Podaj liczbę całkowitą godzin (${PREDICTION_HOURS_MIN}–${PREDICTION_HOURS_MAX}).` }
+	}
+
+	const parsed = Number.parseInt(trimmed, 10)
+	if (parsed < PREDICTION_HOURS_MIN || parsed > PREDICTION_HOURS_MAX) {
+		return {
+			error: `Horyzont musi być od ${PREDICTION_HOURS_MIN} do ${PREDICTION_HOURS_MAX} h.`
+		}
+	}
+
+	return { hours: parsed }
+}
+
 function pickTimestamp(row: Record<string, unknown>): string | null {
 	for (const key of ["timestamp", "time", "date", "ts", "datetime"] as const) {
 		const v = row[key]
@@ -127,11 +162,13 @@ async function readPredictionApiErrorMessage(res: Response): Promise<string> {
 
 export async function fetchModelPredictionPoints(
 	stationId: string,
-	targetParam: string
+	targetParam: string,
+	hours: number = PREDICTION_HOURS_DEFAULT
 ): Promise<ModelPredictionPoint[]> {
 	const encParam = encodeURIComponent(targetParam)
 	const encId = encodeURIComponent(stationId)
-	const res = await fetch(`/api/model/prediction/${encParam}/${encId}`)
+	const params = new URLSearchParams({ hours: String(hours) })
+	const res = await fetch(`/api/model/prediction/${encParam}/${encId}?${params}`)
 	if (!res.ok) {
 		const detail = await readPredictionApiErrorMessage(res)
 		throw new Error(detail)

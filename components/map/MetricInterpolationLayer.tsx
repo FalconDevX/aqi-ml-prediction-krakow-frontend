@@ -1,10 +1,17 @@
 "use client"
 
 import { colorAtConcentration, getValueColorScaleForMetric } from "@/lib/chartMetricColorScales"
+import { useDistricts } from "@/hooks/useDistricts"
 import type { StationMeasurementsMap } from "@/hooks/useStationMeasurements"
-import { renderIdwHeatmapCanvas, type GeoSample } from "@/lib/geospatialInterpolation"
+import {
+	boundingBoxFromPolygons,
+	extractPolygonsFromGeoJson,
+	gridDimensionsForBounds,
+	renderIdwHeatmapCanvas,
+	type GeoSample
+} from "@/lib/geospatialInterpolation"
 import L from "leaflet"
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { useMap } from "react-leaflet"
 import type { MetricOption } from "./MapOptionsPanel"
 
@@ -21,7 +28,7 @@ type Props = {
 	enabled: boolean
 }
 
-const GRID_SIZE = 120
+const GRID_LONG_SIDE = 420
 const OVERLAY_OPACITY = 0.48
 const INTERPOLATION_PANE = "metricInterpolationPane"
 
@@ -41,7 +48,17 @@ export default function MetricInterpolationLayer({
 	enabled
 }: Props) {
 	const map = useMap()
+	const districts = useDistricts()
 	const overlayRef = useRef<L.ImageOverlay | null>(null)
+
+	const krakowClipPolygons = useMemo(
+		() => districts.flatMap((district) => extractPolygonsFromGeoJson(district.data)),
+		[districts]
+	)
+	const krakowBounds = useMemo(
+		() => boundingBoxFromPolygons(krakowClipPolygons),
+		[krakowClipPolygons]
+	)
 
 	useEffect(() => {
 		ensureInterpolationPane(map)
@@ -54,7 +71,7 @@ export default function MetricInterpolationLayer({
 			}
 		}
 
-		if (!enabled || selectedMetric === "default" || !scale) {
+		if (!enabled || selectedMetric === "default" || !scale || !krakowBounds) {
 			removeOverlay()
 			return
 		}
@@ -73,56 +90,52 @@ export default function MetricInterpolationLayer({
 			return
 		}
 
-		const redraw = () => {
-			const bounds = map.getBounds()
-			const geoBounds = {
-				south: bounds.getSouth(),
-				west: bounds.getWest(),
-				north: bounds.getNorth(),
-				east: bounds.getEast()
-			}
+		const { width: gridWidth, height: gridHeight } = gridDimensionsForBounds(
+			krakowBounds,
+			GRID_LONG_SIDE
+		)
 
-			const canvas = renderIdwHeatmapCanvas(
-				geoBounds,
-				GRID_SIZE,
-				GRID_SIZE,
-				samples,
-				(value) => colorAtConcentration(scale, value),
-				OVERLAY_OPACITY
-			)
+		const canvas = renderIdwHeatmapCanvas(
+			krakowBounds,
+			gridWidth,
+			gridHeight,
+			samples,
+			(value) => colorAtConcentration(scale, value),
+			OVERLAY_OPACITY,
+			krakowClipPolygons
+		)
 
-			removeOverlay()
-			if (!canvas) {
-				return
-			}
-
-			const leafletBounds = L.latLngBounds(
-				[geoBounds.south, geoBounds.west],
-				[geoBounds.north, geoBounds.east]
-			)
-
-			overlayRef.current = L.imageOverlay(canvas.toDataURL(), leafletBounds, {
-				opacity: 1,
-				interactive: false,
-				className: "metric-idw-overlay",
-				pane: INTERPOLATION_PANE
-			})
-			overlayRef.current.addTo(map)
-			overlayRef.current.bringToFront()
+		removeOverlay()
+		if (!canvas) {
+			return
 		}
 
-		redraw()
-		map.on("moveend", redraw)
-		map.on("zoomend", redraw)
-		map.on("resize", redraw)
+		const leafletBounds = L.latLngBounds(
+			[krakowBounds.south, krakowBounds.west],
+			[krakowBounds.north, krakowBounds.east]
+		)
+
+		overlayRef.current = L.imageOverlay(canvas.toDataURL(), leafletBounds, {
+			opacity: 1,
+			interactive: false,
+			className: "metric-idw-overlay",
+			pane: INTERPOLATION_PANE
+		})
+		overlayRef.current.addTo(map)
+		overlayRef.current.bringToFront()
 
 		return () => {
-			map.off("moveend", redraw)
-			map.off("zoomend", redraw)
-			map.off("resize", redraw)
 			removeOverlay()
 		}
-	}, [map, stations, measurements, selectedMetric, enabled])
+	}, [
+		map,
+		stations,
+		measurements,
+		selectedMetric,
+		enabled,
+		krakowBounds,
+		krakowClipPolygons
+	])
 
 	return null
 }

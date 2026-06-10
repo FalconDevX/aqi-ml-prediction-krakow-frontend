@@ -1,7 +1,12 @@
 "use client"
 
 import MeasurementsChart from "@/components/station/MeasurementsChart"
-import { fetchModelPredictionPoints } from "@/lib/modelPrediction"
+import {
+	fetchModelPredictionPoints,
+	PREDICTION_HOURS_DEFAULT,
+	PREDICTION_HOURS_PRESETS,
+	resolvePredictionHours
+} from "@/lib/modelPrediction"
 import { useEffect, useMemo, useState } from "react"
 
 type HistoryRow = Record<string, unknown>
@@ -50,8 +55,15 @@ export default function MeasurementsHistory({ history, stationId }: Props) {
 	const [selectedMetric, setSelectedMetric] = useState(availableMetrics[0] ?? "")
 	const [interpolate, setInterpolate] = useState(false)
 	const [showAiModel, setShowAiModel] = useState(false)
+	const [predictionHoursPreset, setPredictionHoursPreset] = useState<number>(PREDICTION_HOURS_DEFAULT)
+	const [predictionHoursCustom, setPredictionHoursCustom] = useState("")
 	const [aiPredictionPoints, setAiPredictionPoints] = useState<{ timestamp: string; value: number }[] | null>(null)
 	const [aiError, setAiError] = useState<string | null>(null)
+
+	const resolvedPredictionHours = useMemo(
+		() => resolvePredictionHours(predictionHoursPreset, predictionHoursCustom),
+		[predictionHoursPreset, predictionHoursCustom]
+	)
 
 	useEffect(() => {
 		if (!selectedMetric && availableMetrics[0]) {
@@ -71,13 +83,23 @@ export default function MeasurementsHistory({ history, stationId }: Props) {
 			return
 		}
 
+		if ("error" in resolvedPredictionHours) {
+			setAiPredictionPoints(null)
+			setAiError(resolvedPredictionHours.error)
+			return
+		}
+
 		let cancelled = false
 		setAiPredictionPoints(null)
 		setAiError(null)
 
 		void (async () => {
 			try {
-				const pts = await fetchModelPredictionPoints(stationId, selectedMetric)
+				const pts = await fetchModelPredictionPoints(
+					stationId,
+					selectedMetric,
+					resolvedPredictionHours.hours
+				)
 				if (cancelled) {
 					return
 				}
@@ -97,7 +119,7 @@ export default function MeasurementsHistory({ history, stationId }: Props) {
 		return () => {
 			cancelled = true
 		}
-	}, [showAiModel, stationId, selectedMetric])
+	}, [showAiModel, stationId, selectedMetric, resolvedPredictionHours])
 
 	const points = useMemo(() => {
 		if (!selectedMetric) {
@@ -147,7 +169,9 @@ export default function MeasurementsHistory({ history, stationId }: Props) {
 								onChange={(event) => setInterpolate(event.target.checked)}
 								className="h-3.5 w-3.5 accent-lime-400"
 							/>
-							Interpolate
+							<span>
+								Interpolate
+							</span>
 						</label>
 
 						<label className="flex items-center gap-1 text-xs text-zinc-300">
@@ -159,6 +183,39 @@ export default function MeasurementsHistory({ history, stationId }: Props) {
 							/>
 							Model AI
 						</label>
+
+						{showAiModel ? (
+							<div className="flex items-center gap-1.5 text-xs text-zinc-300">
+								<label className="flex items-center gap-1">
+									<span className="text-zinc-500">horyzont</span>
+									<select
+										value={predictionHoursPreset}
+										onChange={(event) => setPredictionHoursPreset(Number(event.target.value))}
+										disabled={predictionHoursCustom.trim() !== ""}
+										className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-sky-400 disabled:opacity-50"
+										aria-label="Horyzont predykcji w godzinach"
+									>
+										{PREDICTION_HOURS_PRESETS.map((hours) => (
+											<option key={hours} value={hours}>
+												{hours} h
+											</option>
+										))}
+									</select>
+								</label>
+								<label className="flex items-center gap-1">
+									<span className="text-zinc-500">lub</span>
+									<input
+										type="text"
+										inputMode="numeric"
+										value={predictionHoursCustom}
+										onChange={(event) => setPredictionHoursCustom(event.target.value)}
+										placeholder="1–15"
+										className="w-14 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-sky-400"
+										aria-label="Własny horyzont predykcji w godzinach"
+									/>
+								</label>
+							</div>
+						) : null}
 					</div>
 				}
 				interpolate={interpolate}

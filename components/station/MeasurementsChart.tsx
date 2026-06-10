@@ -1,12 +1,18 @@
 "use client"
 
 import {
-	colorAtConcentration,
 	getValueColorScaleForMetric,
 	scaleToCssBandGradient,
 	valueScaleLegendTicks,
 	type ValueColorScale
 } from "@/lib/chartMetricColorScales"
+import {
+	buildWhitespaceTimeScaleSeries,
+	connectPredictionToLastMeasurement,
+	measurementPointsToChartSeries,
+	splitMeasurementPointsByGaps,
+	type MeasurementPoint
+} from "@/lib/measurementChartSeries"
 import {
 	ColorType,
 	createChart,
@@ -19,15 +25,9 @@ import {
 	type ISeriesApi,
 	type LineData,
 	type MouseEventParams,
-	type Time,
-	type UTCTimestamp
+	type Time
 } from "lightweight-charts"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-
-type MeasurementPoint = {
-	timestamp: string
-	value: number
-}
 
 type Props = {
 	title: string
@@ -69,37 +69,6 @@ function timeToIso(time: Time): string | null {
 	return null
 }
 
-function measurementPointsToLineData(
-	points: MeasurementPoint[],
-	valueScale: ValueColorScale | undefined
-): LineData<Time>[] {
-	let lastSec = -Infinity
-	const out: LineData<Time>[] = []
-
-	for (const p of points) {
-		const ms = Date.parse(p.timestamp)
-		if (Number.isNaN(ms)) {
-			continue
-		}
-		let sec = Math.floor(ms / 1000)
-		if (sec <= lastSec) {
-			sec = lastSec + 1
-		}
-		lastSec = sec
-
-		const item: LineData<Time> = {
-			time: sec as UTCTimestamp,
-			value: p.value
-		}
-		if (valueScale) {
-			item.color = colorAtConcentration(valueScale, p.value)
-		}
-		out.push(item)
-	}
-
-	return out
-}
-
 type HoverInfo = {
 	timestampIso: string
 	measured?: number
@@ -109,29 +78,122 @@ type HoverInfo = {
 type LightweightMeasurementsPlotProps = {
 	points: MeasurementPoint[]
 	predictionPoints: MeasurementPoint[] | null
+	/** Włączone = poprzednie zachowanie: krzywa + łączenie przez luki. */
 	interpolate: boolean
-	valueScale: ValueColorScale | undefined
-	onHoverChange: (info: HoverInfo | null) => void
+	metricKey: string
 }
 
 type LineSeriesApi = ISeriesApi<"Line", Time>
+
+const BASE_LINE_SERIES_OPTIONS = {
+	lastPriceAnimation: LastPriceAnimationMode.Disabled,
+	priceLineVisible: false,
+	lastValueVisible: false
+} as const
+
+function readSeriesValue(
+	param: MouseEventParams<Time>,
+	seriesList: LineSeriesApi[]
+): number | undefined {
+	for (const target of seriesList) {
+		const row = param.seriesData.get(target) as LineData<Time> | undefined
+		if (row && typeof row.value === "number") {
+			return row.value
+		}
+	}
+	return undefined
+}
+
+function clearChartSeries(chart: IChartApi, refs: LineSeriesApi[]): void {
+	for (const target of refs) {
+		chart.removeSeries(target)
+	}
+	refs.length = 0
+}
+
+function syncSegmentSeries(
+	chart: IChartApi,
+	segments: MeasurementPoint[][],
+	refs: LineSeriesApi[],
+	options: {
+		color: string
+		lineStyle?: LineStyle
+		lineType: LineType
+		valueScale?: ValueColorScale
+	}
+): void {
+	clearChartSeries(chart, refs)
+
+	for (const segment of segments) {
+		if (segment.length === 0) {
+			continue
+		}
+
+		const target = chart.addSeries(LineSeries, {
+			...BASE_LINE_SERIES_OPTIONS,
+			color: options.color,
+			lineWidth: 2,
+			lineStyle: options.lineStyle ?? LineStyle.Solid,
+			lineType: options.lineType,
+			crosshairMarkerVisible: true
+		})
+		target.setData(measurementPointsToChartSeries(segment, options.valueScale, { breakGaps: false }))
+		refs.push(target)
+	}
+}
+
+function buildMeasurementKey(
+	points: MeasurementPoint[],
+	interpolate: boolean,
+	metricKey: string
+): string {
+	const first = points[0]?.timestamp ?? ""
+	const last = points.at(-1)?.timestamp ?? ""
+	return `${interpolate}|${metricKey}|${points.length}|${first}|${last}`
+}
+
+function buildPredictionKey(predictionPoints: MeasurementPoint[] | null): string {
+	const prediction = predictionPoints ?? []
+	const predFirst = prediction[0]?.timestamp ?? ""
+	const predLast = prediction.at(-1)?.timestamp ?? ""
+	return `${prediction.length}|${predFirst}|${predLast}`
+}
 
 function LightweightMeasurementsPlot({
 	points,
 	predictionPoints,
 	interpolate,
-	valueScale,
-	onHoverChange
+	metricKey
 }: LightweightMeasurementsPlotProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const chartRef = useRef<IChartApi | null>(null)
+	const timeScaleSeriesRef = useRef<LineSeriesApi | null>(null)
 	const seriesRef = useRef<LineSeriesApi | null>(null)
+	const segmentSeriesRef = useRef<LineSeriesApi[]>([])
 	const predictionSeriesRef = useRef<LineSeriesApi | null>(null)
-	const hoverCbRef = useRef(onHoverChange)
+	const predictionSegmentSeriesRef = useRef<LineSeriesApi[]>([])
+	const measurementKeyRef = useRef("")
+	const predictionKeyRef = useRef("")
+	const [hover, setHover] = useState<HoverInfo | null>(null)
+	const lastHoverRef = useRef<HoverInfo | null>(null)
 
-	useEffect(() => {
-		hoverCbRef.current = onHoverChange
-	}, [onHoverChange])
+	const valueScale = useMemo(
+		() => (metricKey ? getValueColorScaleForMetric(metricKey) : undefined),
+		[metricKey]
+	)
+
+	const emitHover = useCallback((info: HoverInfo | null) => {
+		const prev = lastHoverRef.current
+		if (
+			prev?.timestampIso === info?.timestampIso &&
+			prev?.measured === info?.measured &&
+			prev?.predicted === info?.predicted
+		) {
+			return
+		}
+		lastHoverRef.current = info
+		setHover(info)
+	}, [])
 
 	useEffect(() => {
 		const el = containerRef.current
@@ -185,24 +247,35 @@ function LightweightMeasurementsPlot({
 			}
 		})
 
+		const timeScaleSeries = chart.addSeries(LineSeries, {
+			color: "rgba(0,0,0,0)",
+			lineWidth: 1,
+			lineVisible: false,
+			pointMarkersVisible: false,
+			crosshairMarkerVisible: false,
+			lastValueVisible: false,
+			priceLineVisible: false
+		})
+
 		const series = chart.addSeries(LineSeries, {
+			...BASE_LINE_SERIES_OPTIONS,
 			color: "#a3e635",
 			lineWidth: 2,
 			lineType: interpolate ? LineType.Curved : LineType.Simple,
-			crosshairMarkerVisible: true,
-			lastPriceAnimation: LastPriceAnimationMode.Disabled
+			crosshairMarkerVisible: true
 		})
 
 		const predSeries = chart.addSeries(LineSeries, {
+			...BASE_LINE_SERIES_OPTIONS,
 			color: "#38bdf8",
 			lineWidth: 2,
 			lineStyle: LineStyle.Dashed,
 			lineType: interpolate ? LineType.Curved : LineType.Simple,
-			crosshairMarkerVisible: true,
-			lastPriceAnimation: LastPriceAnimationMode.Disabled
+			crosshairMarkerVisible: true
 		})
 
 		chartRef.current = chart
+		timeScaleSeriesRef.current = timeScaleSeries
 		seriesRef.current = series
 		predictionSeriesRef.current = predSeries
 
@@ -212,27 +285,28 @@ function LightweightMeasurementsPlot({
 			}
 
 			if (param.time === undefined || param.point === undefined) {
-				hoverCbRef.current(null)
+				emitHover(null)
 				return
 			}
 
 			try {
 				const iso = timeToIso(param.time)
 				if (!iso) {
-					hoverCbRef.current(null)
+					emitHover(null)
 					return
 				}
-				const mainRow = param.seriesData.get(series) as LineData<Time> | undefined
-				const predRow = param.seriesData.get(predSeries) as LineData<Time> | undefined
-				const measured = mainRow && typeof mainRow.value === "number" ? mainRow.value : undefined
-				const predicted = predRow && typeof predRow.value === "number" ? predRow.value : undefined
+				const measured = readSeriesValue(param, [series, ...segmentSeriesRef.current])
+				const predicted = readSeriesValue(param, [
+					predSeries,
+					...predictionSegmentSeriesRef.current
+				])
 				if (measured === undefined && predicted === undefined) {
-					hoverCbRef.current(null)
+					emitHover(null)
 					return
 				}
-				hoverCbRef.current({ timestampIso: iso, measured, predicted })
+				emitHover({ timestampIso: iso, measured, predicted })
 			} catch {
-				hoverCbRef.current(null)
+				emitHover(null)
 			}
 		}
 
@@ -240,44 +314,141 @@ function LightweightMeasurementsPlot({
 
 		return () => {
 			chart.unsubscribeCrosshairMove(onCrosshairMove)
+			clearChartSeries(chart, segmentSeriesRef.current)
+			clearChartSeries(chart, predictionSegmentSeriesRef.current)
 			chart.remove()
 			chartRef.current = null
+			timeScaleSeriesRef.current = null
 			seriesRef.current = null
 			predictionSeriesRef.current = null
-			hoverCbRef.current(null)
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- jedna instancja wykresu; interpolate aktualizuje osobny efekt
 	}, [])
 
 	useEffect(() => {
 		const series = seriesRef.current
-		const chart = chartRef.current
-		if (!series || !chart) {
-			return
-		}
-		series.setData(measurementPointsToLineData(points, valueScale))
-		chart.timeScale().fitContent()
-	}, [points, valueScale])
-
-	useEffect(() => {
 		const pred = predictionSeriesRef.current
-		if (!pred) {
+		const timeScaleSeries = timeScaleSeriesRef.current
+		const chart = chartRef.current
+		if (!series || !pred || !timeScaleSeries || !chart) {
 			return
 		}
-		if (predictionPoints === null || predictionPoints.length === 0) {
-			pred.setData([])
-		} else {
-			pred.setData(measurementPointsToLineData(predictionPoints, undefined))
+
+		const measurementKey = buildMeasurementKey(points, interpolate, metricKey)
+		const predictionKey = buildPredictionKey(predictionPoints)
+		const measurementChanged = measurementKeyRef.current !== measurementKey
+		const predictionChanged = predictionKeyRef.current !== predictionKey
+
+		if (!measurementChanged && !predictionChanged) {
+			return
 		}
-	}, [predictionPoints])
+
+		const connectedPrediction = connectPredictionToLastMeasurement(points, predictionPoints ?? [])
+		const lineType = interpolate ? LineType.Curved : LineType.Simple
+
+		if (measurementChanged) {
+			measurementKeyRef.current = measurementKey
+
+			if (interpolate) {
+				timeScaleSeries.setData([])
+				clearChartSeries(chart, segmentSeriesRef.current)
+				series.setData(measurementPointsToChartSeries(points, valueScale, { breakGaps: false }))
+			} else {
+				timeScaleSeries.setData(buildWhitespaceTimeScaleSeries(points, connectedPrediction))
+				series.setData([])
+				syncSegmentSeries(chart, splitMeasurementPointsByGaps(points), segmentSeriesRef.current, {
+					color: "#a3e635",
+					lineType,
+					valueScale
+				})
+			}
+		}
+
+		if (measurementChanged || predictionChanged) {
+			predictionKeyRef.current = predictionKey
+			clearChartSeries(chart, predictionSegmentSeriesRef.current)
+
+			if (!interpolate) {
+				timeScaleSeries.setData(buildWhitespaceTimeScaleSeries(points, connectedPrediction))
+			}
+
+			pred.setData(
+				connectedPrediction.length > 0
+					? measurementPointsToChartSeries(connectedPrediction, undefined, { breakGaps: false })
+					: []
+			)
+			pred.applyOptions({
+				...BASE_LINE_SERIES_OPTIONS,
+				lineStyle: LineStyle.Dashed,
+				lineType,
+				color: "#38bdf8",
+				crosshairMarkerVisible: true
+			})
+		}
+
+		if (measurementChanged) {
+			chart.timeScale().fitContent()
+		}
+	}, [points, predictionPoints, interpolate, metricKey])
 
 	useEffect(() => {
-		const lt = interpolate ? LineType.Curved : LineType.Simple
-		seriesRef.current?.applyOptions({ lineType: lt })
-		predictionSeriesRef.current?.applyOptions({ lineType: lt })
+		const chart = chartRef.current
+		if (!chart) {
+			return
+		}
+
+		const interactive = !interpolate
+		chart.applyOptions({
+			handleScroll: {
+				mouseWheel: interactive,
+				pressedMouseMove: interactive,
+				horzTouchDrag: interactive,
+				vertTouchDrag: false
+			},
+			handleScale: {
+				mouseWheel: interactive,
+				pinch: interactive,
+				axisPressedMouseMove: interactive ? { time: true, price: false } : false,
+				axisDoubleClickReset: interactive
+			},
+			kineticScroll: {
+				touch: interactive,
+				mouse: interactive
+			}
+		})
 	}, [interpolate])
 
-	return <div ref={containerRef} className="h-[220px] w-full min-w-0 overflow-hidden rounded-lg border border-zinc-800/80" />
+	return (
+		<>
+			<div
+				ref={containerRef}
+				className="h-[220px] w-full min-w-0 overflow-hidden rounded-lg border border-zinc-800/80"
+			/>
+			<div className="mt-1 min-h-8 text-xs text-zinc-300">
+				{hover ? (
+					<p>
+						<span className="text-zinc-500">Data:</span> {formatTimestamp(hover.timestampIso)}
+						{hover.measured !== undefined ? (
+							<>
+								{" "}
+								<span className="mx-2 text-zinc-600">|</span>
+								<span className="text-zinc-500">Pomiar:</span> {hover.measured}
+							</>
+						) : null}
+						{hover.predicted !== undefined ? (
+							<>
+								{" "}
+								<span className="mx-2 text-zinc-600">|</span>
+								<span className="text-sky-400/90">AI:</span> {hover.predicted}
+							</>
+						) : null}
+					</p>
+				) : (
+					<p className="text-zinc-500">Najedź na wykres, aby zobaczyć wartość w czasie.</p>
+				)}
+			</div>
+		</>
+	)
 }
 
 export default function MeasurementsChart({
@@ -288,9 +459,10 @@ export default function MeasurementsChart({
 	headerControl,
 	interpolate = false
 }: Props) {
-	const [hover, setHover] = useState<HoverInfo | null>(null)
-
-	const valueScale = metricKey ? getValueColorScaleForMetric(metricKey) : undefined
+	const valueScale = useMemo(
+		() => (metricKey ? getValueColorScaleForMetric(metricKey) : undefined),
+		[metricKey]
+	)
 	const scaleLegendTicks = useMemo(
 		() => (valueScale ? valueScaleLegendTicks(valueScale) : []),
 		[valueScale]
@@ -299,19 +471,6 @@ export default function MeasurementsChart({
 	const lastPoint = points.at(-1)
 	const startTime = points[0]?.timestamp ? formatTimestamp(points[0].timestamp) : "-"
 	const endTime = points.at(-1)?.timestamp ? formatTimestamp(points.at(-1)!.timestamp) : "-"
-
-	const onHoverChange = useCallback((info: HoverInfo | null) => {
-		setHover((prev) => {
-			if (
-				prev?.timestampIso === info?.timestampIso &&
-				prev?.measured === info?.measured &&
-				prev?.predicted === info?.predicted
-			) {
-				return prev
-			}
-			return info
-		})
-	}, [])
 
 	return (
 		<section className="mt-4 rounded-2xl border border-zinc-800/90 bg-zinc-900/70 p-3 shadow-2xl backdrop-blur-sm">
@@ -369,37 +528,18 @@ export default function MeasurementsChart({
 						points={points}
 						predictionPoints={predictionPoints ?? null}
 						interpolate={interpolate}
-						valueScale={valueScale}
-						onHoverChange={onHoverChange}
+						metricKey={metricKey}
 					/>
 
 					<div className="mt-2 text-center text-[11px] text-zinc-500">
 						Pełny zakres czasu: {startTime} — {endTime}
+						{!interpolate ? (
+							<span className="mt-0.5 block">
+								Przewijanie: przeciągnij wykres · Zoom osi X: kółko myszy · Reset: podwójne kliknięcie osi
+							</span>
+						) : null}
 					</div>
 
-					<div className="mt-1 min-h-8 text-xs text-zinc-300">
-						{hover ? (
-							<p>
-								<span className="text-zinc-500">Data:</span> {formatTimestamp(hover.timestampIso)}
-								{hover.measured !== undefined ? (
-									<>
-										{" "}
-										<span className="mx-2 text-zinc-600">|</span>
-										<span className="text-zinc-500">Pomiar:</span> {hover.measured}
-									</>
-								) : null}
-								{hover.predicted !== undefined ? (
-									<>
-										{" "}
-										<span className="mx-2 text-zinc-600">|</span>
-										<span className="text-sky-400/90">	AI:</span> {hover.predicted}
-									</>
-								) : null}
-							</p>
-						) : (
-							<p className="text-zinc-500">Najedź na wykres, aby zobaczyć wartość w czasie.</p>
-						)}
-					</div>
 				</div>
 			)}
 		</section>

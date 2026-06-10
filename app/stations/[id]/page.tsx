@@ -1,4 +1,5 @@
 import MeasurementsHistory from "@/components/station/MeasurementsHistory";
+import { getMetricUnit } from "@/lib/metricUnits";
 import stations from "@/public/stations.json";
 
 type Props = {
@@ -61,19 +62,27 @@ export default async function StationPage({ params }: Props) {
         </header>
 
         <div className="grid max-w-full grid-cols-[repeat(4,5rem)] gap-1 sm:grid-cols-[repeat(5,5rem)] md:grid-cols-[repeat(7,5rem)]">
-          {cards.map(([key, value]) => (
-            <article
-              key={key}
-              className="relative flex aspect-square w-full items-center justify-center rounded-md border border-zinc-700 bg-zinc-800/70 p-1"
-            >
-              <p className="absolute left-1 top-1 text-[10px] uppercase leading-none tracking-wide text-zinc-500">
-                {formatLabel(key)}
-              </p>
-              <p className="text-sm font-semibold leading-none text-zinc-50">
-                {formatValue(value)}
-              </p>
-            </article>
-          ))}
+          {cards.map(([key, value]) => {
+            const unit = getMetricUnit(key);
+            return (
+              <article
+                key={key}
+                className="relative flex aspect-square w-full flex-col items-center justify-center rounded-md border border-zinc-700 bg-zinc-800/70 p-1"
+              >
+                <p className="absolute left-1 top-1 text-[10px] uppercase leading-none tracking-wide text-zinc-500">
+                  {formatLabel(key)}
+                </p>
+                <p className="text-sm font-semibold leading-none text-zinc-50">
+                  {formatValue(value)}
+                </p>
+                {unit ? (
+                  <p className="mt-0.5 text-[9px] leading-none text-zinc-500">
+                    {unit}
+                  </p>
+                ) : null}
+              </article>
+            );
+          })}
         </div>
       </section>
 

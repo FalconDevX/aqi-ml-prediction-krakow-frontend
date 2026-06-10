@@ -1,6 +1,40 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { fetchModelPredictionPoints } from "@/lib/modelPrediction"
+import {
+	fetchModelPredictionPoints,
+	resolvePredictionHours
+} from "@/lib/modelPrediction"
+
+describe("resolvePredictionHours", () => {
+	it("uses preset when custom input is empty", () => {
+		expect(resolvePredictionHours(10, "")).toEqual({ hours: 10 })
+	})
+
+	it("uses custom value when provided", () => {
+		expect(resolvePredictionHours(10, "7")).toEqual({ hours: 7 })
+	})
+
+	it("rejects out of range custom values", () => {
+		expect(resolvePredictionHours(10, "20")).toEqual({
+			error: "Horyzont musi być od 1 do 15 h."
+		})
+	})
+})
+
+describe("fetchModelPredictionPoints request", () => {
+	it("appends hours query parameter", async () => {
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: async () => []
+		})
+		vi.stubGlobal("fetch", fetchMock)
+
+		await fetchModelPredictionPoints("17", "pm25", 5)
+
+		expect(fetchMock).toHaveBeenCalledWith("/api/model/prediction/pm25/17?hours=5")
+		vi.unstubAllGlobals()
+	})
+})
 
 describe("fetchModelPredictionPoints API errors", () => {
 	it("surfaces FastAPI detail string from 400 body", async () => {
