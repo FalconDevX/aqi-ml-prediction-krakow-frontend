@@ -5,6 +5,7 @@ import {
 	scaleToCssBandGradient,
 	valueScaleLegendTicks
 } from "@/lib/chartMetricColorScales"
+import { dataDrivenCssGradient } from "@/lib/dataDrivenColors"
 import { useMemo } from "react"
 
 type MetricOption =
@@ -27,6 +28,8 @@ type Props = {
 	onMetricChange: (metric: MetricOption) => void
 	geospatialApprox: boolean
 	onGeospatialApproxChange: (enabled: boolean) => void
+	colorsFromData: boolean
+	onColorsFromDataChange: (enabled: boolean) => void
 }
 
 const OPTIONS: Array<{ value: MetricOption; label: string }> = [
@@ -51,7 +54,9 @@ export default function MapOptionsPanel({
 	selectedMetric,
 	onMetricChange,
 	geospatialApprox,
-	onGeospatialApproxChange
+	onGeospatialApproxChange,
+	colorsFromData,
+	onColorsFromDataChange
 }: Props) {
 	const valueScale = getValueColorScaleForMetric(selectedMetric)
 	const scaleLegendTicks = useMemo(
@@ -84,7 +89,9 @@ export default function MapOptionsPanel({
 					type="checkbox"
 					checked={geospatialApprox}
 					onChange={(event) => onGeospatialApproxChange(event.target.checked)}
-					disabled={selectedMetric === "default" || !valueScale}
+					disabled={
+						selectedMetric === "default" || (!valueScale && !colorsFromData)
+					}
 					className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 accent-lime-400"
 				/>
 				<span>
@@ -95,7 +102,37 @@ export default function MapOptionsPanel({
 				</span>
 			</label>
 
-			{valueScale ? (
+			<label className="mt-3 flex cursor-pointer items-start gap-2 pl-6 text-sm text-zinc-200">
+				<input
+					type="checkbox"
+					checked={colorsFromData}
+					onChange={(event) => onColorsFromDataChange(event.target.checked)}
+					disabled={!geospatialApprox || selectedMetric === "default"}
+					className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 accent-lime-400 disabled:cursor-not-allowed"
+				/>
+				<span>
+					Kolory na podstawie danych
+					<span className="mt-0.5 block text-xs text-zinc-500">
+						Pomija paletę norm; min stacji = ciemny, max = jasny
+					</span>
+				</span>
+			</label>
+
+			{geospatialApprox && colorsFromData ? (
+				<div className="mt-5">
+					<p className="text-xs font-medium text-zinc-300">Skala z danych</p>
+					<div
+						className="mt-2 h-3 w-full rounded-sm border border-zinc-700"
+						style={{ background: dataDrivenCssGradient() }}
+						role="img"
+						aria-label="Skala kolorów dopasowana do danych"
+					/>
+					<div className="mt-1 flex justify-between text-[10px] text-zinc-500">
+						<span>min pomiaru</span>
+						<span>max pomiaru</span>
+					</div>
+				</div>
+			) : valueScale ? (
 				<div className="mt-5">
 					<p className="text-xs font-medium text-zinc-300">
 						Skala {valueScale.id.toUpperCase()} ({valueScale.unitLabel})

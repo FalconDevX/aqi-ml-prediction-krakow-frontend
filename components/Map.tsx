@@ -16,12 +16,14 @@ const CENTER: LatLngExpression = [50.06, 19.94]
 type Props = {
 	selectedMetric: MetricOption
 	geospatialApprox?: boolean
+	colorsFromData?: boolean
 	visibleStationIds?: Set<number> | null
 }
 
 export default function Map({
 	selectedMetric,
 	geospatialApprox = false,
+	colorsFromData = false,
 	visibleStationIds = null
 }: Props) {
 	const measurements = useStationMeasurements()
@@ -48,12 +50,14 @@ export default function Map({
 					stations={visibleStations}
 					measurements={measurements}
 					selectedMetric={selectedMetric}
+					colorsFromData={colorsFromData}
 				/>
 				<MetricInterpolationLayer
 					stations={visibleStations}
 					measurements={measurements}
 					selectedMetric={selectedMetric}
 					enabled={geospatialApprox}
+					colorsFromData={colorsFromData}
 				/>
 			</MapContainer>
 		</div>

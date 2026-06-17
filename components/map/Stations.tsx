@@ -1,6 +1,7 @@
 "use client"
 
 import { colorAtConcentration, getValueColorScaleForMetric } from "@/lib/chartMetricColorScales"
+import { colorAtDataValue, metricDataRangeFromStations } from "@/lib/dataDrivenColors"
 import type { StationMeasurementsMap } from "@/hooks/useStationMeasurements"
 import { Marker, Tooltip } from "react-leaflet"
 import L from "leaflet"
@@ -22,6 +23,7 @@ type Props = {
 	stations: Station[]
 	measurements: StationMeasurementsMap
 	selectedMetric: MetricOption
+	colorsFromData?: boolean
 }
 
 const LABELS: Record<string, string> = {
@@ -44,8 +46,20 @@ function createStationIcon(color: string = DEFAULT_STATION_COLOR) {
 	})
 }
 
-export default function Stations({ stations, measurements, selectedMetric }: Props) {
+export default function Stations({
+	stations,
+	measurements,
+	selectedMetric,
+	colorsFromData = false
+}: Props) {
 	const router = useRouter()
+
+	const dataRange = useMemo(() => {
+		if (!colorsFromData || selectedMetric === "default") {
+			return null
+		}
+		return metricDataRangeFromStations(stations, measurements, selectedMetric)
+	}, [colorsFromData, selectedMetric, stations, measurements])
 
 	const iconByColor = useMemo(() => new Map<string, L.DivIcon>(), [])
 
@@ -65,6 +79,10 @@ export default function Stations({ stations, measurements, selectedMetric }: Pro
 		const metricValue = measurements[stationId]?.values[selectedMetric]
 		if (typeof metricValue !== "number") {
 			return DEFAULT_STATION_COLOR
+		}
+
+		if (colorsFromData && dataRange) {
+			return colorAtDataValue(metricValue, dataRange.min, dataRange.max)
 		}
 
 		const scale = getValueColorScaleForMetric(selectedMetric)

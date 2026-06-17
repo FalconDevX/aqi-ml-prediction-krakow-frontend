@@ -21,6 +21,7 @@ const Map = dynamic(() => import("@/components/Map"), {
 export default function Home() {
   const [selectedMetric, setSelectedMetric] = useState<MetricOption>("default");
   const [geospatialApprox, setGeospatialApprox] = useState(false);
+  const [colorsFromData, setColorsFromData] = useState(false);
   const [stationSearchQuery, setStationSearchQuery] = useState("");
 
   const visibleStationIds = useMemo(
@@ -41,6 +42,7 @@ export default function Home() {
           <Map
             selectedMetric={selectedMetric}
             geospatialApprox={geospatialApprox}
+            colorsFromData={colorsFromData}
             visibleStationIds={visibleStationIds}
           />
         </div>
@@ -55,6 +57,8 @@ export default function Home() {
             onMetricChange={setSelectedMetric}
             geospatialApprox={geospatialApprox}
             onGeospatialApproxChange={setGeospatialApprox}
+            colorsFromData={colorsFromData}
+            onColorsFromDataChange={setColorsFromData}
           />
         </div>
       </div>

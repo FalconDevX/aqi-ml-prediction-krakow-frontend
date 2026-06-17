@@ -7,7 +7,9 @@ const defaultProps = {
 	selectedMetric: "default" as const,
 	onMetricChange: () => {},
 	geospatialApprox: false,
-	onGeospatialApproxChange: () => {}
+	onGeospatialApproxChange: () => {},
+	colorsFromData: false,
+	onColorsFromDataChange: () => {}
 }
 
 describe("MapOptionsPanel", () => {
@@ -62,5 +64,36 @@ describe("MapOptionsPanel", () => {
 		await user.click(checkbox)
 
 		expect(onGeospatialApproxChange).toHaveBeenCalledWith(true)
+	})
+
+	it("wywołuje onColorsFromDataChange po zaznaczeniu checkboxa", async () => {
+		const user = userEvent.setup()
+		const onColorsFromDataChange = vi.fn()
+		render(
+			<MapOptionsPanel
+				{...defaultProps}
+				selectedMetric="temperature"
+				geospatialApprox
+				onColorsFromDataChange={onColorsFromDataChange}
+			/>
+		)
+
+		const checkbox = screen.getByRole("checkbox", { name: /Kolory z danych/i })
+		await user.click(checkbox)
+
+		expect(onColorsFromDataChange).toHaveBeenCalledWith(true)
+	})
+
+	it("pokazuje skalę z danych zamiast palety norm", () => {
+		render(
+			<MapOptionsPanel
+				{...defaultProps}
+				selectedMetric="pm25"
+				geospatialApprox
+				colorsFromData
+			/>
+		)
+		expect(screen.getByText("Skala z danych")).toBeInTheDocument()
+		expect(screen.queryByText(/Skala pm25/i)).not.toBeInTheDocument()
 	})
 })

@@ -1,6 +1,7 @@
 "use client"
 
 import { colorAtConcentration, getValueColorScaleForMetric } from "@/lib/chartMetricColorScales"
+import { colorAtDataValue, metricDataRangeFromStations } from "@/lib/dataDrivenColors"
 import { useDistricts } from "@/hooks/useDistricts"
 import type { StationMeasurementsMap } from "@/hooks/useStationMeasurements"
 import {
@@ -26,6 +27,7 @@ type Props = {
 	measurements: StationMeasurementsMap
 	selectedMetric: MetricOption
 	enabled: boolean
+	colorsFromData?: boolean
 }
 
 const GRID_LONG_SIDE = 420
@@ -45,7 +47,8 @@ export default function MetricInterpolationLayer({
 	stations,
 	measurements,
 	selectedMetric,
-	enabled
+	enabled,
+	colorsFromData = false
 }: Props) {
 	const map = useMap()
 	const districts = useDistricts()
@@ -71,7 +74,13 @@ export default function MetricInterpolationLayer({
 			}
 		}
 
-		if (!enabled || selectedMetric === "default" || !scale || !krakowBounds) {
+		const useManualPalette = !colorsFromData
+		if (
+			!enabled ||
+			selectedMetric === "default" ||
+			(useManualPalette && !scale) ||
+			!krakowBounds
+		) {
 			removeOverlay()
 			return
 		}
@@ -90,6 +99,11 @@ export default function MetricInterpolationLayer({
 			return
 		}
 
+		const dataRange = metricDataRangeFromStations(stations, measurements, selectedMetric)
+		const colorForValue = colorsFromData && dataRange
+			? (value: number) => colorAtDataValue(value, dataRange.min, dataRange.max)
+			: (value: number) => colorAtConcentration(scale!, value)
+
 		const { width: gridWidth, height: gridHeight } = gridDimensionsForBounds(
 			krakowBounds,
 			GRID_LONG_SIDE
@@ -100,7 +114,7 @@ export default function MetricInterpolationLayer({
 			gridWidth,
 			gridHeight,
 			samples,
-			(value) => colorAtConcentration(scale, value),
+			colorForValue,
 			OVERLAY_OPACITY,
 			krakowClipPolygons
 		)
@@ -133,6 +147,7 @@ export default function MetricInterpolationLayer({
 		measurements,
 		selectedMetric,
 		enabled,
+		colorsFromData,
 		krakowBounds,
 		krakowClipPolygons
 	])
